@@ -30,7 +30,7 @@ interface AuthUser {
 function tokenToUser(token: any): AuthUser | null {
   if (!token || !token.email) return null
   return {
-    id: token.id as string,
+    id: (token.id || token.sub) as string,
     email: token.email as string,
     name: token.name as string,
     role: token.role as string,

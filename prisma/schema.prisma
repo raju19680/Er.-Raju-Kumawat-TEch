@@ -425,6 +425,9 @@ model Test {
   pdfPasswordProtected Boolean       @default(false)
   themeId              String?
   themeSnapshot        String?
+  seoTitle             String?
+  seoDescription       String?
+  richSnippets         Boolean       @default(true)
   questions            Question[]
   chapter              Chapter?      @relation(fields: [chapterId], references: [id])
   concept              Concept?      @relation(fields: [conceptId], references: [id])

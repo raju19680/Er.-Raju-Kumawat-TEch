@@ -112,6 +112,9 @@ interface FormState {
   pdfPasswordProtected: boolean
   examProfileId?: string
   themeId?: string
+  seoTitle?: string
+  seoDescription?: string
+  richSnippets?: boolean
 }
 
 const defaultFormState: FormState = {
@@ -160,6 +163,9 @@ const defaultFormState: FormState = {
   pdfPasswordProtected: false,
     examProfileId: '',
     themeId: '',
+    seoTitle: '',
+    seoDescription: '',
+    richSnippets: true,
 }
 
 function getInitialState(editData?: Record<string, unknown>): FormState {
@@ -227,6 +233,9 @@ function getInitialState(editData?: Record<string, unknown>): FormState {
     pdfPasswordProtected: (editData.pdfPasswordProtected as boolean) || false,
       examProfileId: (editData.examProfileId as string) || '',
       themeId: (editData.themeId as string) || '',
+      seoTitle: (editData.seoTitle as string) || '',
+      seoDescription: (editData.seoDescription as string) || '',
+      richSnippets: editData.richSnippets !== undefined ? (editData.richSnippets as boolean) : true,
   }
 }
 
@@ -844,6 +853,57 @@ function DrawerFormContent({
                 </div>
               </CardContent>
             </Card>
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">SEO & UI Theme</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Test Interface Theme</Label>
+                    <Select value={form.themeId || 'default'} onValueChange={(v) => updateField('themeId', v)}>
+                      <SelectTrigger className="w-full h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default Theme</SelectItem>
+                        <SelectItem value="rssb">RSSB Pattern (Auto-Debar)</SelectItem>
+                        <SelectItem value="jee">JEE Pattern</SelectItem>
+                        <SelectItem value="neet">NEET Pattern</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between border rounded-lg p-4 mt-2">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium">Enable Rich Snippets</Label>
+                      <p className="text-xs text-muted-foreground">Add schema markup for search engines</p>
+                    </div>
+                    <Switch
+                      checked={form.richSnippets}
+                      onCheckedChange={(v) => updateField('richSnippets', v)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">SEO Meta Title</Label>
+                  <Input
+                    placeholder="Enter meta title for SEO"
+                    value={form.seoTitle}
+                    onChange={(e) => updateField('seoTitle', e.target.value)}
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">SEO Meta Description</Label>
+                  <Textarea
+                    placeholder="Enter meta description for SEO"
+                    value={form.seoDescription}
+                    onChange={(e) => updateField('seoDescription', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </div>
 
@@ -875,4 +935,7 @@ export default function AddTestDrawer({ open, onOpenChange, editData, onSave }: 
     </Sheet>
   )
 }
+
+
+
 

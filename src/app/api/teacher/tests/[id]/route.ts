@@ -46,6 +46,10 @@ export async function PUT(
         isPdfTest: data.isPdfTest !== undefined ? Boolean(data.isPdfTest) : undefined,
         pdfUrl: data.pdfUrl !== undefined ? data.pdfUrl : undefined,
         testMode: data.testMode !== undefined ? data.testMode : undefined,
+        themeId: data.themeId !== undefined ? data.themeId : undefined,
+        seoTitle: data.seoTitle !== undefined ? data.seoTitle : undefined,
+        seoDescription: data.seoDescription !== undefined ? data.seoDescription : undefined,
+        richSnippets: data.richSnippets !== undefined ? Boolean(data.richSnippets) : undefined,
         allowPdfDownload: data.allowPdfDownload !== undefined ? Boolean(data.allowPdfDownload) : undefined,
         allowPdfExport: data.allowPdfDownload !== undefined ? Boolean(data.allowPdfDownload) : undefined,
         pdfPasswordProtected: data.pdfPasswordProtected !== undefined ? Boolean(data.pdfPasswordProtected) : undefined,
@@ -120,4 +124,5 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: 'Failed to delete test' }, { status: 500 })
   }
 }
+
 

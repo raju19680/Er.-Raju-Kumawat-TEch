@@ -94,8 +94,12 @@ export async function POST(request: NextRequest) {
         pdfUrl: body.pdfUrl || null,
         isSubjective: body.isSubjective ?? false,
         testSeriesId: body.testSeriesId,
-        organizationId: orgId,
-      },
+          organizationId: orgId,
+          themeId: body.themeId || null,
+          seoTitle: body.seoTitle || null,
+          seoDescription: body.seoDescription || null,
+          richSnippets: body.richSnippets ?? true,
+        },
     })
 
     return NextResponse.json(test, { status: 201 })
@@ -104,4 +108,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create test' }, { status: 500 })
   }
 }
+
 
