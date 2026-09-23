@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -276,27 +276,14 @@ export function TestSeriesContentManager({
 
   const handleDuplicateTest = async (test: Test) => {
     try {
-      const duplicatedTest = {
-        title: `${test.title} (Copy)`,
-        status: test.status,
-        isLive: false,
-        isLocked: test.isLocked,
-        numberOfQuestions: test.numberOfQuestions,
-        totalMarks: test.totalMarks,
-        totalDuration: test.totalDuration,
-        isPdfTest: test.isPdfTest,
-        pdfUrl: test.pdfUrl,
-        testMode: test.testMode,
-        sortOrder: tests.length
-      }
-      
-      const res = await apiFetchJSON(`/api/teacher/test-series/${testSeriesId}/tests`, {
-        method: 'POST',
-        body: JSON.stringify(duplicatedTest)
+      const res = await apiFetchJSON(`/api/teacher/tests/${test.id}/duplicate`, {
+        method: 'POST'
       })
       if (res.success) {
         toast.success('Test duplicated successfully')
         loadTests()
+      } else {
+        toast.error(res.error || 'Failed to duplicate test')
       }
     } catch (err) {
       console.error(err)
@@ -308,23 +295,41 @@ export function TestSeriesContentManager({
     toast.info('Preview mode coming in next update')
   }
 
-  const handleAction = (action: string, test: Test) => {
+  const handleAction = async (action: string, test: Test) => {
     switch (action) {
       case 'view_result':
-        // Mock navigate to result
+        // Navigate to test results
         toast.info(`Viewing results for ${test.title}`)
+        // router.push(`/admin/tests/${test.id}/results`)
         break;
       case 'review_question':
         toast.info(`Reviewing questions for ${test.title}`)
+        setActiveTestManager(test) // Or navigate to question review specific view
         break;
       case 'export_pdf_with_sol':
-        toast.success(`Exporting PDF with solution...`)
+        toast.info(`Generating PDF with solutions...`)
+        window.open(`/api/teacher/tests/${test.id}/pdf?solutions=true`, '_blank')
         break;
       case 'export_pdf_without_sol':
-        toast.success(`Exporting PDF without solution...`)
+        toast.info(`Generating PDF...`)
+        window.open(`/api/teacher/tests/${test.id}/pdf?solutions=false`, '_blank')
         break;
       case 'reevaluate_marks':
-        toast.success(`Reevaluating marks for attempts...`)
+        try {
+          toast.loading(`Reevaluating marks for ${test.title}...`, { id: 'reevaluate' })
+          const res = await apiFetchJSON(`/api/teacher/tests/${test.id}/reevaluate`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          })
+          if (res.success) {
+            toast.success(res.message || `Re-evaluation completed`, { id: 'reevaluate' })
+          } else {
+            toast.error(res.error || 'Failed to re-evaluate', { id: 'reevaluate' })
+          }
+        } catch (err) {
+          console.error(err)
+          toast.error('Failed to re-evaluate', { id: 'reevaluate' })
+        }
         break;
     }
   }

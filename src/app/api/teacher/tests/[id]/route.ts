@@ -28,7 +28,7 @@ export async function PUT(
       include: { testSeries: true }
     })
 
-    if (!existingTest || existingTest.testSeries?.organizationId !== auth.orgId) {
+    if (!existingTest || (existingTest.organizationId !== auth.orgId && existingTest.testSeries?.organizationId !== auth.orgId)) {
       return NextResponse.json({ success: false, error: 'Test not found' }, { status: 404 })
     }
 
@@ -100,7 +100,7 @@ export async function DELETE(
       include: { testSeries: true }
     })
 
-    if (!existingTest || existingTest.testSeries?.organizationId !== auth.orgId) {
+    if (!existingTest || (existingTest.organizationId !== auth.orgId && existingTest.testSeries?.organizationId !== auth.orgId)) {
       return NextResponse.json({ success: false, error: 'Test not found' }, { status: 404 })
     }
 
@@ -124,5 +124,6 @@ export async function DELETE(
     return NextResponse.json({ success: false, error: 'Failed to delete test' }, { status: 500 })
   }
 }
+
 
 
