@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAdminOrTeacher } from '@/lib/auth-helpers'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import * as fs from 'fs'
+import * as path from 'path'
 
 export async function GET(
   req: NextRequest,
@@ -20,7 +22,7 @@ export async function GET(
     const { searchParams } = new URL(req.url)
     const withSolution = searchParams.get('solutions') === 'true'
 
-    // Questions are directly on Test (Question[] via testId), not a join table
+    // Questions are directly on Test (Question[] via testId)
     const test = await db.test.findFirst({
       where: {
         id,
@@ -38,8 +40,30 @@ export async function GET(
     }
 
     const pdfDoc = await PDFDocument.create()
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
+
+    // Try to embed Noto Sans Devanagari for Hindi support
+    let customFont: any = null
+    let customFontBold: any = null
+    try {
+      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari.ttf')
+      if (fs.existsSync(fontPath)) {
+        const fontBytes = fs.readFileSync(fontPath)
+        customFont = await pdfDoc.embedFont(fontBytes, { subset: true })
+        customFontBold = customFont // Variable font, same for bold
+      }
+    } catch (e) {
+      console.warn('Could not load custom font, falling back to Helvetica:', e)
+    }
+
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    const helveticaRegular = await pdfDoc.embedFont(StandardFonts.Helvetica)
+
+    // Use custom font if available, else standard fonts
+    const fontBold = customFont || helveticaBold
+    const fontRegular = customFont || helveticaRegular
+
+    // Check if text has non-ASCII (Hindi/Devanagari)
+    const hasNonAscii = (text: string) => /[^\x00-\x7F]/.test(text)
 
     // Strip HTML tags and decode entities
     const sanitizeText = (html: string | null | undefined): string => {
@@ -57,16 +81,55 @@ export async function GET(
         .trim()
     }
 
-    // Word wrap long text into lines that fit within maxWidth
+    // Safe width measurement that handles encoding errors
+    const safeTextWidth = (text: string, font: any, fontSize: number): number => {
+      try {
+        return font.widthOfTextAtSize(text, fontSize)
+      } catch {
+        // Fallback: estimate width based on character count
+        return text.length * fontSize * 0.5
+      }
+    }
+
+    // Choose the right font for the text content
+    const getFontForText = (text: string, bold: boolean) => {
+      if (hasNonAscii(text)) {
+        return customFont || (bold ? helveticaBold : helveticaRegular)
+      }
+      return bold ? fontBold : fontRegular
+    }
+
+    // Safe drawText that handles encoding errors
+    const safeDrawText = (page: any, text: string, options: any) => {
+      try {
+        page.drawText(text, options)
+      } catch {
+        // If the font can't render the text, try fallback
+        try {
+          // Strip non-ASCII for fallback rendering
+          const asciiOnly = text.replace(/[^\x20-\x7E]/g, '?')
+          const fallbackFont = options.font === fontBold ? helveticaBold : helveticaRegular
+          page.drawText(asciiOnly, { ...options, font: fallbackFont })
+        } catch (e2) {
+          console.warn('Could not render text at all:', e2)
+        }
+      }
+    }
+
+    // Word wrap with safe width measurement
     const wrapText = (text: string, font: any, fontSize: number, maxWidth: number): string[] => {
       const lines: string[] = []
       const paragraphs = text.split('\n')
       for (const para of paragraphs) {
+        if (!para.trim()) {
+          lines.push('')
+          continue
+        }
         const words = para.split(' ')
         let currentLine = ''
         for (const word of words) {
           const testLine = currentLine ? `${currentLine} ${word}` : word
-          const width = font.widthOfTextAtSize(testLine, fontSize)
+          const width = safeTextWidth(testLine, font, fontSize)
           if (width > maxWidth && currentLine) {
             lines.push(currentLine)
             currentLine = word
@@ -89,7 +152,6 @@ export async function GET(
     let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
     let y = PAGE_HEIGHT - 50
 
-    // Helper to check if we need a new page
     const ensureSpace = (needed: number) => {
       if (y - needed < MARGIN_BOTTOM) {
         page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
@@ -98,22 +160,23 @@ export async function GET(
     }
 
     // ─── Title Header ───
-    page.drawText(test.title || 'Examination Question Paper', {
+    const titleFont = getFontForText(test.title || '', true)
+    safeDrawText(page, test.title || 'Examination Question Paper', {
       x: MARGIN_LEFT,
       y,
       size: 18,
-      font: fontBold,
+      font: titleFont,
       color: rgb(0.1, 0.1, 0.4),
     })
     y -= 28
 
     // ─── Metadata Banner ───
     const metaText = `Duration: ${test.totalDuration || 60} mins  |  Total Marks: ${test.totalMarks || 100}  |  Questions: ${test.questions?.length || 0}  |  Negative Marking: ${test.negativeMarks || 0}`
-    page.drawText(metaText, {
+    safeDrawText(page, metaText, {
       x: MARGIN_LEFT,
       y,
       size: 9,
-      font: fontRegular,
+      font: helveticaRegular,
       color: rgb(0.4, 0.4, 0.4),
     })
     y -= 15
@@ -129,11 +192,11 @@ export async function GET(
 
     // Mode label
     const modeLabel = withSolution ? '(With Solutions)' : '(Without Solutions)'
-    page.drawText(modeLabel, {
+    safeDrawText(page, modeLabel, {
       x: MARGIN_LEFT,
       y,
       size: 10,
-      font: fontBold,
+      font: helveticaBold,
       color: withSolution ? rgb(0.0, 0.5, 0.0) : rgb(0.5, 0.0, 0.0),
     })
     y -= 25
@@ -142,11 +205,11 @@ export async function GET(
     const questions = test.questions || []
 
     if (questions.length === 0) {
-      page.drawText('No questions found in this test.', {
+      safeDrawText(page, 'No questions found in this test.', {
         x: MARGIN_LEFT,
         y,
         size: 12,
-        font: fontRegular,
+        font: helveticaRegular,
         color: rgb(0.5, 0.5, 0.5),
       })
     } else {
@@ -158,55 +221,59 @@ export async function GET(
         // Question text
         const qClean = sanitizeText(q.title || q.heading || '')
         const qPrefix = `Q${i + 1}. `
-        const qLines = wrapText(qPrefix + qClean, fontBold, 11, CONTENT_WIDTH)
+        const qFullText = qPrefix + qClean
+        const qFont = getFontForText(qFullText, true)
+        const qLines = wrapText(qFullText, qFont, 11, CONTENT_WIDTH)
 
         // Options
         const rawOptions = [q.option1, q.option2, q.option3, q.option4, q.option5].filter(Boolean) as string[]
-        const optionLines: { lines: string[]; isCorrect: boolean }[] = rawOptions.map((opt, j) => {
+        const optionData: { lines: string[]; isCorrect: boolean; font: any }[] = rawOptions.map((opt, j) => {
           const optClean = sanitizeText(opt)
           const label = optLabels[j] || `(${j + 1})`
-          const lines = wrapText(`${label} ${optClean}`, fontRegular, 10, CONTENT_WIDTH - 20)
+          const fullOptText = `${label} ${optClean}`
+          const optFont = getFontForText(fullOptText, false)
+          const lines = wrapText(fullOptText, optFont, 10, CONTENT_WIDTH - 20)
           let isCorrect = false
           if (withSolution && q.correctOption) {
             if (q.correctOption === `option${j + 1}`) isCorrect = true
           }
-          return { lines, isCorrect }
+          return { lines, isCorrect, font: optFont }
         })
 
-        // Solution text (if with solution mode)
+        // Solution
         let solutionLines: string[] = []
+        let solFont = helveticaRegular
         if (withSolution) {
           const solText = sanitizeText(q.solutionText || '')
           if (solText) {
-            solutionLines = wrapText(`Solution: ${solText}`, fontRegular, 9, CONTENT_WIDTH - 20)
+            solFont = getFontForText(solText, false)
+            solutionLines = wrapText(`Solution: ${solText}`, solFont, 9, CONTENT_WIDTH - 20)
           }
-          // Show correct answer label
           if (q.correctOption) {
             const correctIdx = parseInt(q.correctOption.replace('option', '')) - 1
             if (correctIdx >= 0 && correctIdx < optLabels.length) {
-              const correctLabel = `✓ Correct Answer: ${optLabels[correctIdx]}`
-              solutionLines = [correctLabel, ...solutionLines]
+              solutionLines = [`Correct Answer: ${optLabels[correctIdx]}`, ...solutionLines]
             }
           }
         }
 
-        // Calculate total space needed for this question
+        // Calculate space needed
         const spaceNeeded =
-          qLines.length * 16 +                                         // question lines
-          optionLines.reduce((sum, o) => sum + o.lines.length * 15, 0) + // option lines
-          (solutionLines.length > 0 ? solutionLines.length * 14 + 10 : 0) + // solution
-          30                                                            // padding
+          qLines.length * 16 +
+          optionData.reduce((sum, o) => sum + o.lines.length * 15, 0) +
+          (solutionLines.length > 0 ? solutionLines.length * 14 + 10 : 0) +
+          30
 
-        ensureSpace(Math.min(spaceNeeded, 300)) // cap at 300 to avoid infinite loop
+        ensureSpace(Math.min(spaceNeeded, 300))
 
-        // Draw question number + text
+        // Draw question
         for (const line of qLines) {
           ensureSpace(20)
-          page.drawText(line, {
+          safeDrawText(page, line, {
             x: MARGIN_LEFT,
             y,
             size: 11,
-            font: fontBold,
+            font: qFont,
             color: rgb(0.1, 0.1, 0.1),
           })
           y -= 16
@@ -214,40 +281,39 @@ export async function GET(
         y -= 4
 
         // Draw options
-        for (const optData of optionLines) {
-          for (const line of optData.lines) {
+        for (const optInfo of optionData) {
+          for (const line of optInfo.lines) {
             ensureSpace(18)
-            page.drawText(line, {
+            safeDrawText(page, line, {
               x: MARGIN_LEFT + 15,
               y,
               size: 10,
-              font: optData.isCorrect ? fontBold : fontRegular,
-              color: optData.isCorrect ? rgb(0.0, 0.55, 0.0) : rgb(0.2, 0.2, 0.2),
+              font: optInfo.isCorrect ? (customFont || helveticaBold) : optInfo.font,
+              color: optInfo.isCorrect ? rgb(0.0, 0.55, 0.0) : rgb(0.2, 0.2, 0.2),
             })
             y -= 15
           }
         }
 
-        // Draw solution (if applicable)
+        // Draw solution
         if (solutionLines.length > 0) {
           y -= 5
           for (const line of solutionLines) {
             ensureSpace(16)
-            page.drawText(line, {
+            safeDrawText(page, line, {
               x: MARGIN_LEFT + 15,
               y,
               size: 9,
-              font: fontRegular,
+              font: solFont,
               color: rgb(0.0, 0.3, 0.7),
             })
             y -= 14
           }
         }
 
-        // Spacing between questions
         y -= 18
 
-        // Light separator line between questions
+        // Separator line
         if (i < questions.length - 1) {
           ensureSpace(10)
           page.drawLine({
@@ -260,7 +326,7 @@ export async function GET(
       }
     }
 
-    // ─── Footer on last page ───
+    // ─── Page numbers ───
     const pageCount = pdfDoc.getPageCount()
     for (let p = 0; p < pageCount; p++) {
       const pg = pdfDoc.getPage(p)
@@ -268,7 +334,7 @@ export async function GET(
         x: PAGE_WIDTH - 120,
         y: 30,
         size: 8,
-        font: fontRegular,
+        font: helveticaRegular,
         color: rgb(0.6, 0.6, 0.6),
       })
     }
