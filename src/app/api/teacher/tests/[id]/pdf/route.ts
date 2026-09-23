@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAdminOrTeacher } from '@/lib/auth-helpers'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -40,6 +41,7 @@ export async function GET(
     }
 
     const pdfDoc = await PDFDocument.create()
+    pdfDoc.registerFontkit(fontkit)
 
     // Try to embed Noto Sans Devanagari for Hindi support
     let customFont: any = null
