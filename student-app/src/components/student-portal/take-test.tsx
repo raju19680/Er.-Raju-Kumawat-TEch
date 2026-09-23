@@ -167,6 +167,7 @@ export default function TakeTest() {
   }, [selectedTestId])
 
   // Start attempt and timer
+  const [isStarting, setIsStarting] = useState(false)
   const handleStartTest = useCallback(async () => {
     if (!test) return
     try {
@@ -227,7 +228,7 @@ export default function TakeTest() {
       }, 1000)
     } catch (err) {
       console.error('Start attempt error:', err)
-      toast.error('Failed to start test. Please try again.')
+      toast.error(err instanceof Error ? err.message : 'Failed to start test. Please try again.')
     }
   }, [test, attemptId])
 
@@ -650,6 +651,7 @@ const questions = test?.questions || []
             <Button
               className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-base sm:text-lg py-4 sm:py-6"
               onClick={handleStartTest}
+                disabled={isStarting}
             >
               {attemptId ? 'Resume Test' : 'Start Test'}
             </Button>
@@ -1315,3 +1317,5 @@ const questions = test?.questions || []
     </div>
   )
 }
+
+

@@ -19,11 +19,25 @@ export async function GET(req: NextRequest) {
     if (!student && auth.role === 'student') {
       return NextResponse.json({ success: false, message: 'Student profile not found' }, { status: 404 })
     }
-    const studentId = student?.id || null;
+    let studentId = student?.id || null;
+    if (!studentId && auth.role !== 'student') {
+      try {
+        const newStudent = await db.student.create({
+          data: {
+            userId: auth.id,
+            fullName: 'Admin Preview',
+            phone: '0000000000'
+          }
+        });
+        studentId = newStudent.id;
+      } catch (e) {
+        console.error('Failed to create dummy student for admin:', e);
+      }
+    }
 
     const testId = req.nextUrl.searchParams.get('testId')
 
-    const where: any = { studentId: studentId || 'admin-bypass' }
+    const where: any = { studentId: studentId }
     if (testId) where.testId = testId
 
     const attempts = await db.testAttempt.findMany({
@@ -87,7 +101,21 @@ export async function POST(req: NextRequest) {
     if (!student && auth.role === 'student') {
       return NextResponse.json({ success: false, message: 'Student profile not found' }, { status: 404 })
     }
-    const studentId = student?.id || null;
+    let studentId = student?.id || null;
+    if (!studentId && auth.role !== 'student') {
+      try {
+        const newStudent = await db.student.create({
+          data: {
+            userId: auth.id,
+            fullName: 'Admin Preview',
+            phone: '0000000000'
+          }
+        });
+        studentId = newStudent.id;
+      } catch (e) {
+        console.error('Failed to create dummy student for admin:', e);
+      }
+    }
 
     // Check test exists and is live
     const test = await db.test.findUnique({
@@ -121,7 +149,7 @@ export async function POST(req: NextRequest) {
 
     // Check for existing in-progress attempt
     const inProgress = await db.testAttempt.findFirst({
-      where: { studentId: studentId || 'admin-bypass', testId, status: 'in_progress' },
+      where: { studentId: studentId, testId, status: 'in_progress' },
     })
 
     if (inProgress) {
@@ -134,7 +162,7 @@ export async function POST(req: NextRequest) {
 
     // Check max attempts
     const completedAttempts = await db.testAttempt.count({
-      where: { studentId: studentId || 'admin-bypass', testId, status: 'completed' },
+      where: { studentId: studentId, testId, status: 'completed' },
     })
 
     if (test.maxAttempts !== -1 && completedAttempts >= test.maxAttempts) {
@@ -147,7 +175,7 @@ export async function POST(req: NextRequest) {
     // Create new attempt
     const attempt = await db.testAttempt.create({
       data: {
-        studentId: studentId || 'admin-bypass',
+        studentId: studentId,
         testId,
         totalMarks: test.totalMarks,
         status: 'in_progress',
@@ -161,3 +189,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Something went wrong' }, { status: 500 })
   }
 }
+
