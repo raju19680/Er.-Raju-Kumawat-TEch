@@ -1,0 +1,1421 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  GraduationCap, Search, Menu, BookOpen, ClipboardList, FileText,
+     7→  Link2, ArrowRight, ChevronDown, Home, HelpCircle, MessageCircle,
+     8→  Shield, Lock, RotateCcw, Mail, ExternalLink, AlertCircle,
+     9→  BookMarked, Play, Smartphone, Sparkles, Trophy, User, LogIn,
+    10→  X, Loader2, Newspaper, Bell, Info, ChevronRight, GraduationCap as Cap,
+    11→  Phone, MapPin, Clock, Users, Star, Download, ChevronLeft,
+    12→  Eye, EyeOff, KeyRound, CheckCircle, ArrowLeft, AlertTriangle, CheckCircle2,
+    13→} from 'lucide-react'
+    14→import { useAppStore } from '@/lib/store'
+    15→import { Button } from '@/components/ui/button'
+    16→import { Card, CardContent } from '@/components/ui/card'
+    17→import { Badge } from '@/components/ui/badge'
+    18→import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+    19→import { Skeleton } from '@/components/ui/skeleton'
+    20→import { Input } from '@/components/ui/input'
+    21→import { Label } from '@/components/ui/label'
+    22→import {
+    23→  Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose,
+    24→} from '@/components/ui/sheet'
+    25→import {
+    26→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+    27→} from '@/components/ui/dialog'
+    28→import {
+    29→  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    30→  DropdownMenuTrigger, DropdownMenuSeparator,
+    31→} from '@/components/ui/dropdown-menu'
+    32→import {
+    33→  Carousel, CarouselContent, CarouselItem, type CarouselApi,
+    34→} from '@/components/ui/carousel'
+    35→import { Separator } from '@/components/ui/separator'
+    36→// signIn removed — using /api/auth/direct-login instead
+    37→
+    38→// ─── Types ──────────────────────────────────────────────────────────────────
+    39→interface OrgData {
+    40→  id: string; name: string; code: string; logo: string | null; accentColor: string
+    41→}
+    42→interface CourseData {
+    43→  id: string; title: string; description: string | null; thumbnail: string | null
+    44→  price: number; mrp: number; category: string | null; status: string
+    45→}
+    46→interface TestSeriesData {
+    47→  id: string; title: string; description: string | null; thumbnail: string | null
+    48→  price: number; mrp: number; category: string | null; isCombo: boolean
+    49→  status: string; testCount: number
+    50→}
+    51→interface QuickLinkData {
+    52→  id: string; title: string; url: string; icon: string | null; sortOrder: number
+    53→}
+    54→interface BannerData {
+    55→  id: string; title: string; image: string; link: string | null; sortOrder: number
+    56→}
+    57→interface CategoryData {
+    58→  id: string; name: string; slug: string; icon: string | null
+    59→}
+    60→interface PortalData {
+    61→  organization: OrgData; courses: CourseData[]; testSeries: TestSeriesData[]
+    62→  quickLinks: QuickLinkData[]; banners: BannerData[]; categories: CategoryData[]
+    63→}
+    64→
+    65→type PortalPage = 'home' | 'courses' | 'test-series' | 'docs' | 'quick-links' | 'about'
+    66→type AuthView = 'login' | 'forgot-password' | 'reset-password' | 'reset-success'
+    67→
+    68→const BLUE = '#2563EB'
+    69→const BLUE_LIGHT = '#2563EB15'
+    70→const BLUE_MEDIUM = '#2563EB30'
+    71→const BLUE_HOVER = '#2563EB20'
+    72→const BLUE_BORDER = '#2563EB40'
+    73→
+    74→// ─── Password Strength Indicator ────────────────────────────────────────────
+    75→function PasswordStrengthIndicator({ password }: { password: string }) {
+    76→  const strength = useMemo(() => {
+    77→    if (!password) return { score: 0, feedback: [] as string[] }
+    78→    const feedback: string[] = []
+    79→    let metCount = 0
+    80→    if (password.length >= 8) metCount++; else feedback.push('8+ characters')
+    81→    if (/[A-Z]/.test(password)) metCount++; else feedback.push('uppercase letter')
+    82→    if (/[a-z]/.test(password)) metCount++; else feedback.push('lowercase letter')
+    83→    if (/\d/.test(password)) metCount++; else feedback.push('number')
+    84→    if (/[^A-Za-z0-9]/.test(password)) metCount++; else feedback.push('special character')
+    85→    let score: number
+    86→    if (metCount <= 2) { score = 1 }
+    87→    else if (metCount === 3) { score = 2 }
+    88→    else if (metCount === 4) { score = 3 }
+    89→    else { score = 4 }
+    90→    return { score, feedback }
+    91→  }, [password])
+    92→
+    93→  if (!password) return null
+    94→  const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-emerald-400', 'bg-emerald-600']
+    95→  const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Very Strong']
+    96→  const textColors = ['text-red-600', 'text-orange-600', 'text-yellow-600', 'text-emerald-500', 'text-emerald-700']
+    97→
+    98→  return (
+    99→    <div className="space-y-1.5">
+   100→      <div className="flex gap-1">
+   101→        {[0, 1, 2, 3, 4].map((i) => (
+   102→          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= strength.score ? colors[strength.score] : 'bg-gray-200'}`} />
+   103→        ))}
+   104→      </div>
+   105→      <div className="flex items-center justify-between">
+   106→        <span className={`text-xs font-medium ${textColors[strength.score]}`}>{labels[strength.score]}</span>
+   107→        {strength.feedback.length > 0 && strength.score < 4 && (
+   108→          <span className="text-xs text-gray-400">Need: {strength.feedback.join(', ')}</span>
+   109→        )}
+   110→      </div>
+   111→    </div>
+   112→  )
+   113→}
+   114→
+   115→// ─── Verified Org Badge for Auth Dialog ────────────────────────────────────
+   116→function VerifiedOrgBadge({ org }: { org: OrgData }) {
+   117→  const accent = org.accentColor || BLUE
+   118→  const initials = org.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+   119→  return (
+   120→    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+   121→      className="flex items-center gap-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+   122→      <div className="flex items-center justify-center w-8 h-8 rounded-md text-white font-bold text-xs" style={{ backgroundColor: accent }}>{initials}</div>
+   123→      <div className="flex-1 min-w-0">
+   124→        <p className="text-xs font-semibold text-emerald-900 truncate">{org.name}</p>
+   125→        <p className="text-[10px] text-emerald-600">Verified</p>
+   126→      </div>
+   127→      <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+   128→    </motion.div>
+   129→  )
+   130→}
+   131→
+   132→const heroGradients = [
+   133→  'from-blue-700 via-blue-600 to-indigo-500',
+   134→  'from-indigo-700 via-blue-600 to-sky-500',
+   135→  'from-blue-800 via-blue-500 to-cyan-400',
+   136→]
+   137→const cardGradients = [
+   138→  'from-blue-500 to-indigo-500', 'from-sky-500 to-blue-500',
+   139→  'from-indigo-500 to-violet-500', 'from-blue-600 to-cyan-500',
+   140→]
+   141→const tags = ['Bestseller', 'Popular', 'New', 'Trending']
+   142→
+   143→// ─── Skeletons ──────────────────────────────────────────────────────────────
+   144→function NavbarSkeleton() {
+   145→  return (
+   146→    <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100 shadow-sm">
+   147→      <div className="mx-auto max-w-7xl flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+   148→        <div className="flex items-center gap-2.5">
+   149→          <Skeleton className="w-9 h-9 rounded-lg" />
+   150→          <Skeleton className="w-32 h-5" />
+   151→        </div>
+   152→        <div className="hidden lg:flex items-center gap-2">
+   153→          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="w-16 h-8 rounded-md" />)}
+   154→        </div>
+   155→        <div className="flex items-center gap-2">
+   156→          <Skeleton className="w-9 h-9 rounded-full" />
+   157→          <Skeleton className="w-8 h-8 rounded-full" />
+   158→        </div>
+   159→      </div>
+   160→    </header>
+   161→  )
+   162→}
+   163→
+   164→function CardSkeleton() {
+   165→  return (
+   166→    <Card className="rounded-xl overflow-hidden py-0">
+   167→      <Skeleton className="h-40 w-full" />
+   168→      <CardContent className="p-4 space-y-3">
+   169→        <Skeleton className="h-4 w-3/4" />
+   170→        <Skeleton className="h-3 w-1/2" />
+   171→        <Skeleton className="h-8 w-full rounded-lg" />
+   172→      </CardContent>
+   173→    </Card>
+   174→  )
+   175→}
+   176→
+   177→// ─── Error / Empty ──────────────────────────────────────────────────────────
+   178→function ErrorState({ onRetry }: { onRetry: () => void }) {
+   179→  return (
+   180→    <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
+   181→      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-md">
+   182→        <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-red-50 mx-auto mb-6">
+   183→          <AlertCircle className="size-10 text-red-500" />
+   184→        </div>
+   185→        <h2 className="text-2xl font-bold text-gray-900 mb-2">Something Went Wrong</h2>
+   186→        <p className="text-gray-500 mb-6">We couldn&apos;t load the portal data. Please try again.</p>
+   187→        <Button onClick={onRetry} className="gap-2 text-white" style={{ backgroundColor: BLUE }}>
+   188→          <RotateCcw className="size-4" /> Try Again
+   189→        </Button>
+   190→      </motion.div>
+   191→    </div>
+   192→  )
+   193→}
+   194→
+   195→// ─── Student Auth Dialog ────────────────────────────────────────────────────
+   196→function StudentAuthDialog({ open, onOpenChange, initialView, orgData }: {
+   197→  open: boolean
+   198→  onOpenChange: (open: boolean) => void
+   199→  initialView?: AuthView
+   200→  orgData: OrgData
+   201→}) {
+   202→  const loginToStore = useAppStore((s) => s.login)
+   203→  const [authView, setAuthView] = useState<AuthView>(initialView || 'login')
+   204→
+   205→  // Login form state
+   206→  const [orgId, setOrgId] = useState('')
+   207→  const [email, setEmail] = useState('')
+   208→  const [password, setPassword] = useState('')
+   209→  const [showPassword, setShowPassword] = useState(false)
+   210→  const [authLoading, setAuthLoading] = useState(false)
+   211→  const [authError, setAuthError] = useState('')
+   212→  const [verifiedOrg, setVerifiedOrg] = useState<OrgData | null>(null)
+   213→  const [verifyingOrg, setVerifyingOrg] = useState(false)
+   214→
+   215→  // Forgot password state
+   216→  const [fpOrgId, setFpOrgId] = useState('')
+   217→  const [fpEmail, setFpEmail] = useState('')
+   218→  const [fpLoading, setFpLoading] = useState(false)
+   219→  const [fpError, setFpError] = useState('')
+   220→  const [fpSuccess, setFpSuccess] = useState(false)
+   221→  const [fpVerifiedOrg, setFpVerifiedOrg] = useState<OrgData | null>(null)
+   222→  const [fpVerifyingOrg, setFpVerifyingOrg] = useState(false)
+   223→
+   224→  // Reset password state
+   225→  const [resetToken, setResetToken] = useState('')
+   226→  const [resetUser, setResetUser] = useState<{ name: string; email: string } | null>(null)
+   227→  const [tokenValidating, setTokenValidating] = useState(false)
+   228→  const [tokenError, setTokenError] = useState('')
+   229→  const [rpPassword, setRpPassword] = useState('')
+   230→  const [rpConfirmPassword, setRpConfirmPassword] = useState('')
+   231→  const [rpShowPassword, setRpShowPassword] = useState(false)
+   232→  const [rpShowConfirm, setRpShowConfirm] = useState(false)
+   233→  const [rpLoading, setRpLoading] = useState(false)
+   234→  const [rpError, setRpError] = useState('')
+   235→
+   236→  // Sync with initialView prop changes
+   237→  useEffect(() => {
+   238→    if (initialView) setAuthView(initialView)
+   239→  }, [initialView])
+   240→
+   241→  // Reset state when dialog closes
+   242→  const handleOpenChange = useCallback((newOpen: boolean) => {
+   243→    if (!newOpen) {
+   244→      setAuthView('login')
+   245→      setOrgId('')
+   246→      setEmail('')
+   247→      setPassword('')
+   248→      setAuthError('')
+   249→      setVerifiedOrg(null)
+   250→      setFpOrgId('')
+   251→      setFpEmail('')
+   252→      setFpError('')
+   253→      setFpSuccess(false)
+   254→      setFpVerifiedOrg(null)
+   255→      setResetToken('')
+   256→      setResetUser(null)
+   257→      setTokenError('')
+   258→      setRpPassword('')
+   259→      setRpConfirmPassword('')
+   260→      setRpError('')
+   261→    }
+   262→    onOpenChange(newOpen)
+   263→  }, [onOpenChange])
+   264→
+   265→  // Verify org when orgId changes (debounced) - login form
+   266→  useEffect(() => {
+   267→    const trimmed = orgId.trim()
+   268→    if (!trimmed) { setVerifiedOrg(null); return }
+   269→    const timer = setTimeout(async () => {
+   270→      setVerifyingOrg(true)
+   271→      try {
+   272→        const res = await fetch('/api/auth/verify-org', {
+   273→          method: 'POST', headers: { 'Content-Type': 'application/json' },
+   274→          body: JSON.stringify({ orgCode: trimmed }),
+   275→        })
+   276→        const data = await res.json()
+   277→        setVerifiedOrg(data.success ? data.organization : null)
+   278→      } catch { setVerifiedOrg(null) }
+   279→      finally { setVerifyingOrg(false) }
+   280→    }, 500)
+   281→    return () => clearTimeout(timer)
+   282→  }, [orgId])
+   283→
+   284→  // Verify org for forgot password form (debounced)
+   285→  useEffect(() => {
+   286→    const trimmed = fpOrgId.trim()
+   287→    if (!trimmed) { setFpVerifiedOrg(null); return }
+   288→    const timer = setTimeout(async () => {
+   289→      setFpVerifyingOrg(true)
+   290→      try {
+   291→        const res = await fetch('/api/auth/verify-org', {
+   292→          method: 'POST', headers: { 'Content-Type': 'application/json' },
+   293→          body: JSON.stringify({ orgCode: trimmed }),
+   294→        })
+   295→        const data = await res.json()
+   296→        setFpVerifiedOrg(data.success ? data.organization : null)
+   297→      } catch { setFpVerifiedOrg(null) }
+   298→      finally { setFpVerifyingOrg(false) }
+   299→    }, 500)
+   300→    return () => clearTimeout(timer)
+   301→  }, [fpOrgId])
+   302→
+   303→
+   304→
+   305→  // Handle Login
+   306→  const handleLogin = async () => {
+   307→    if (!orgId.trim()) { setAuthError('Please enter your Institute ID'); return }
+   308→    if (!email.trim()) { setAuthError('Please enter your email'); return }
+   309→    if (!password.trim()) { setAuthError('Please enter your password'); return }
+   310→
+   311→    setAuthLoading(true)
+   312→    setAuthError('')
+   313→    try {
+   314→      const res = await fetch('/api/auth/direct-login', {
+   315→        method: 'POST',
+   316→        headers: { 'Content-Type': 'application/json' },
+   317→        body: JSON.stringify({
+   318→          email: email.trim().toLowerCase(),
+   319→          password: password,
+   320→          orgId: orgId.trim(),
+   321→        }),
+   322→      })
+   323→      const data = await res.json()
+   324→
+   325→      if (!data.success) {
+   326→        setAuthError(data.message || 'Invalid email or password')
+   327→        setAuthLoading(false)
+   328→        return
+   329→      }
+   330→
+   331→      // Login succeeded - use returned user data directly
+   332→      const u = data.user
+   333→      loginToStore(
+   334→        u.orgCode || '',
+   335→        u.orgName || 'Er. Raju Kumawat Tech',
+   336→        u.name || email.trim().split('@')[0],
+   337→        u.email || email.trim().toLowerCase(),
+   338→        u.role || 'student',
+   339→        u.loginMode || 'student'
+   340→      )
+   341→
+   342→      // Fetch API token (non-critical)
+   343→      try {
+   344→        const tokenRes = await fetch('/api/auth/session-token', {
+   345→          method: 'POST',
+   346→          headers: { 'Content-Type': 'application/json' },
+   347→          body: JSON.stringify({ email: u.email, orgId: u.orgId }),
+   348→        })
+   349→        const tokenData = await tokenRes.json()
+   350→        if (tokenData.success && tokenData.token) {
+   351→          useAppStore.getState().setApiToken(tokenData.token)
+   352→        }
+   353→      } catch {}
+   354→
+   355→      setAuthLoading(false)
+   356→      onOpenChange(false)
+   357→    } catch {
+   358→      setAuthError('Something went wrong. Please try again.')
+   359→      setAuthLoading(false)
+   360→    }
+   361→  }
+   362→
+   363→  // Handle Forgot Password
+   364→  const handleForgotPassword = async () => {
+   365→    if (!fpOrgId.trim()) { setFpError('Please enter your Institute ID'); return }
+   366→    if (!fpEmail.trim()) { setFpError('Please enter your email address'); return }
+   367→
+   368→    setFpLoading(true)
+   369→    setFpError('')
+   370→    try {
+   371→      const res = await fetch('/api/auth/forgot-password', {
+   372→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   373→        body: JSON.stringify({ email: fpEmail.trim().toLowerCase(), orgId: fpOrgId.trim(), source: 'student' }),
+   374→      })
+   375→      const data = await res.json()
+   376→      if (data.success) { setFpSuccess(true) }
+   377→      else { setFpError(data.error || 'Something went wrong. Please try again.') }
+   378→    } catch {
+   379→      setFpError('Network error. Please check your connection and try again.')
+   380→    } finally { setFpLoading(false) }
+   381→  }
+   382→
+   383→  // Handle Reset Password
+   384→  const handleResetPassword = async () => {
+   385→    if (!rpPassword) { setRpError('Please enter a new password'); return }
+   386→    if (rpPassword.length < 8) { setRpError('Password must be at least 8 characters long'); return }
+   387→    if (rpPassword !== rpConfirmPassword) { setRpError('Passwords do not match'); return }
+   388→
+   389→    setRpLoading(true)
+   390→    setRpError('')
+   391→    try {
+   392→      const res = await fetch('/api/auth/reset-password', {
+   393→        method: 'POST', headers: { 'Content-Type': 'application/json' },
+   394→        body: JSON.stringify({ token: resetToken, password: rpPassword }),
+   395→      })
+   396→      const data = await res.json()
+   397→      if (data.success) { setAuthView('reset-success') }
+   398→      else { setRpError(data.error || 'Failed to reset password. Please try again.') }
+   399→    } catch {
+   400→      setRpError('Network error. Please check your connection and try again.')
+   401→    } finally { setRpLoading(false) }
+   402→  }
+   403→
+   404→  // Navigate views
+   405→  const goToForgotPassword = () => {
+   406→    setAuthView('forgot-password')
+   407→    if (orgId.trim()) setFpOrgId(orgId.trim())
+   408→    if (email.trim()) setFpEmail(email.trim())
+   409→    setFpError('')
+   410→    setFpSuccess(false)
+   411→  }
+   412→  const goToLogin = () => { setAuthView('login'); setAuthError('') }
+   413→
+   414→  // Load reset token from URL
+   415→  useEffect(() => {
+   416→    if (!open) return
+   417→    const params = new URLSearchParams(window.location.search)
+   418→    const token = params.get('reset_token')
+   419→    if (token) {
+   420→      setResetToken(token)
+   421→      setAuthView('reset-password')
+   422→      setTokenValidating(true)
+   423→      fetch(`/api/auth/reset-password?token=${encodeURIComponent(token)}`)
+   424→        .then(res => res.json())
+   425→        .then(data => {
+   426→          if (data.success && data.user) { setResetUser(data.user); setTokenError('') }
+   427→          else { setTokenError(data.error || 'This reset link is invalid or has expired.') }
+   428→        })
+   429→        .catch(() => { setTokenError('Failed to validate reset link. Please try again.') })
+   430→        .finally(() => { setTokenValidating(false) })
+   431→      // Clean URL
+   432→      window.history.replaceState({}, '', '/')
+   433→    }
+   434→  }, [open])
+   435→
+   436→  return (
+   437→    <Dialog open={open} onOpenChange={handleOpenChange}>
+   438→      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+   439→        {/* Header banner */}
+   440→        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+   441→          <div className="flex items-center gap-3">
+   442→            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/20">
+   443→              <GraduationCap className="size-5 text-white" />
+   444→            </div>
+   445→            <div>
+   446→              <DialogTitle className="text-white font-bold">
+   447→                {authView === 'login' && 'Sign In'}
+   448→                {authView === 'forgot-password' && 'Forgot Password'}
+   449→                {authView === 'reset-password' && 'Reset Password'}
+   450→                {authView === 'reset-success' && 'Success!'}
+   451→              </DialogTitle>
+   452→              <DialogDescription className="text-blue-100 text-xs">
+   453→                {authView === 'login' && 'Access your student portal'}
+   454→                {authView === 'forgot-password' && 'Reset your password via email'}
+   455→                {authView === 'reset-password' && 'Create a new password'}
+   456→                {authView === 'reset-success' && 'Your password has been reset'}
+   457→              </DialogDescription>
+   458→            </div>
+   459→          </div>
+   460→        </div>
+   461→
+   462→        <div className="p-6 max-h-[70vh] overflow-y-auto">
+   463→          <AnimatePresence mode="wait">
+   464→            {/* ── Login View ── */}
+   465→            {authView === 'login' && (
+   466→              <motion.div key="login" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   467→                <form onSubmit={(e) => { e.preventDefault(); handleLogin() }} className="space-y-4">
+   468→                  <div className="space-y-2">
+   469→                    <Label className="text-sm font-medium text-gray-700">Institute ID <span className="text-red-500">*</span></Label>
+   470→                    <div className="relative">
+   471→                      <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+   472→                      <Input value={orgId} onChange={(e) => { setOrgId(e.target.value); if (authError) setAuthError('') }}
+   473→                        placeholder="Enter institute code" className="h-11 pl-10 pr-10 rounded-lg" disabled={authLoading} required />
+   474→                      {verifyingOrg && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-gray-400 animate-spin" />}
+   475→                    </div>
+   476→                    <AnimatePresence>{verifiedOrg && <VerifiedOrgBadge org={verifiedOrg} />}</AnimatePresence>
+   477→                  </div>
+   478→                  <div className="space-y-2">
+   479→                    <Label className="text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></Label>
+   480→                    <Input type="email" value={email} onChange={(e) => { setEmail(e.target.value); if (authError) setAuthError('') }}
+   481→                      placeholder="Enter your email" className="h-11 rounded-lg" disabled={authLoading} required />
+   482→                  </div>
+   483→                  <div className="space-y-2">
+   484→                    <Label className="text-sm font-medium text-gray-700">Password <span className="text-red-500">*</span></Label>
+   485→                    <div className="relative">
+   486→                      <Input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => { setPassword(e.target.value); if (authError) setAuthError('') }}
+   487→                        placeholder="Enter your password" className="h-11 rounded-lg pr-10" disabled={authLoading} required />
+   488→                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+   489→                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+   490→                      </button>
+   491→                    </div>
+   492→                  </div>
+   493→                  <div className="flex justify-end">
+   494→                    <button type="button" className="text-sm font-medium hover:underline" style={{ color: BLUE }} onClick={goToForgotPassword}>
+   495→                      Forgot Password?
+   496→                    </button>
+   497→                  </div>
+   498→                  {authError && (
+   499→                    <p className="text-sm text-red-500 flex items-center gap-1.5">
+   500→                      <Info className="size-3.5 shrink-0" />{authError}
+   501→                    </p>
+   502→                  )}
+   503→                  <Button type="submit" disabled={authLoading} className="w-full h-11 text-white font-semibold rounded-lg" style={{ backgroundColor: BLUE }}>
+   504→                    {authLoading ? <Loader2 className="size-5 animate-spin" /> : <>Sign In <ArrowRight className="size-4 ml-1" /></>}
+   505→                  </Button>
+   506→                </form>
+   507→              </motion.div>
+   508→            )}
+   509→
+   510→            {/* ── Forgot Password View ── */}
+   511→            {authView === 'forgot-password' && (
+   512→              <motion.div key="forgot" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   513→                <button type="button" onClick={goToLogin} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+   514→                  <ArrowLeft className="size-4" /> Back to Sign In
+   515→                </button>
+   516→
+   517→                {fpSuccess ? (
+   518→                  <div className="flex flex-col items-center text-center p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+   519→                    <div className="flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-3">
+   520→                      <CheckCircle className="size-7 text-emerald-600" />
+   521→                    </div>
+   522→                    <h3 className="text-lg font-semibold text-emerald-900 mb-2">Reset Link Sent!</h3>
+   523→                    <p className="text-sm text-emerald-700 leading-relaxed">
+   524→                      If an account exists for <strong>{fpEmail}</strong>, you will receive a password reset link shortly.
+   525→                    </p>
+   526→                    <p className="text-xs text-emerald-600 mt-2">The link will expire in 1 hour.</p>
+   527→                    <Button onClick={goToLogin} className="mt-4 text-white" style={{ backgroundColor: BLUE }}>Back to Sign In</Button>
+   528→                  </div>
+   529→                ) : (
+   530→                  <form onSubmit={(e) => { e.preventDefault(); handleForgotPassword() }} className="space-y-4">
+   531→                    <div className="space-y-2">
+   532→                      <Label className="text-sm font-medium text-gray-700">Institute ID <span className="text-red-500">*</span></Label>
+   533→                      <div className="relative">
+   534→                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+   535→                        <Input value={fpOrgId} onChange={(e) => { setFpOrgId(e.target.value); if (fpError) setFpError('') }}
+   536→                          placeholder="Enter institute code" className="h-11 pl-10 pr-10 rounded-lg" disabled={fpLoading} required />
+   537→                        {fpVerifyingOrg && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-gray-400 animate-spin" />}
+   538→                      </div>
+   539→                      <AnimatePresence>{fpVerifiedOrg && <VerifiedOrgBadge org={fpVerifiedOrg} />}</AnimatePresence>
+   540→                    </div>
+   541→                    <div className="space-y-2">
+   542→                      <Label className="text-sm font-medium text-gray-700">Email Address <span className="text-red-500">*</span></Label>
+   543→                      <Input type="email" value={fpEmail} onChange={(e) => { setFpEmail(e.target.value); if (fpError) setFpError('') }}
+   544→                        placeholder="Enter your email" className="h-11 rounded-lg" disabled={fpLoading} required />
+   545→                    </div>
+   546→                    {fpError && (
+   547→                      <p className="text-sm text-red-500 flex items-center gap-1.5"><Info className="size-3.5 shrink-0" />{fpError}</p>
+   548→                    )}
+   549→                    <Button type="submit" disabled={fpLoading} className="w-full h-11 text-white font-semibold rounded-lg" style={{ backgroundColor: BLUE }}>
+   550→                      {fpLoading ? <Loader2 className="size-5 animate-spin" /> : <>Send Reset Link <Mail className="size-4 ml-1" /></>}
+   551→                    </Button>
+   552→                  </form>
+   553→                )}
+   554→
+   555→                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+   556→                  <div className="flex items-start gap-2">
+   557→                    <Info className="size-4 text-amber-600 mt-0.5 shrink-0" />
+   558→                    <p className="text-xs text-amber-700">In development mode, the reset link is logged to the server console. Check your terminal or the Email Log in admin panel.</p>
+   559→                  </div>
+   560→                </div>
+   561→              </motion.div>
+   562→            )}
+   563→
+   564→            {/* ── Reset Password View ── */}
+   565→            {authView === 'reset-password' && (
+   566→              <motion.div key="reset" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+   567→                {tokenValidating ? (
+   568→                  <div className="flex flex-col items-center py-8">
+   569→                    <Loader2 className="size-8 text-blue-500 animate-spin mb-3" />
+   570→                    <p className="text-sm text-gray-500">Verifying reset link...</p>
+   571→                  </div>
+   572→                ) : tokenError ? (
+   573→                  <div className="space-y-4">
+   574→                    <div className="flex flex-col items-center text-center p-4 rounded-xl bg-red-50 border border-red-200">
+   575→                      <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 mb-3">
+   576→                        <AlertTriangle className="size-7 text-red-500" />
+   577→                      </div>
+   578→                      <h3 className="text-lg font-semibold text-red-900 mb-2">Invalid Link</h3>
+   579→                      <p className="text-sm text-red-700 leading-relaxed">{tokenError}</p>
+   580→                    </div>
+   581→                    <Button onClick={() => { setAuthView('forgot-password'); setTokenError('') }} className="w-full h-11 text-white font-semibold rounded-lg" style={{ backgroundColor: BLUE }}>
+   582→                      Request New Reset Link
+   583→                    </Button>
+   584→                    <button type="button" onClick={goToLogin} className="w-full text-center text-sm text-gray-500 hover:text-gray-700">
+   585→                      Back to Sign In
+   586→                    </button>
+   587→                  </div>
+   588→                ) : (
+   589→                  <form onSubmit={(e) => { e.preventDefault(); handleResetPassword() }} className="space-y-4">
+   590→                    {resetUser && (
+   591→                      <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+   592→                        <p className="text-sm text-emerald-800">
+   593→                          Resetting password for <strong>{resetUser.name}</strong> ({resetUser.email})
+   594→                        </p>
+   595→                      </div>
+   596→                    )}
+   597→                    <div className="space-y-2">
+   598→                      <Label className="text-sm font-medium text-gray-700">New Password <span className="text-red-500">*</span></Label>
+   599→                      <div className="relative">
+   600→                        <Input type={rpShowPassword ? 'text' : 'password'} value={rpPassword} onChange={(e) => { setRpPassword(e.target.value); if (rpError) setRpError('') }}
+   601→                          placeholder="Enter new password" className="h-11 rounded-lg pr-10" disabled={rpLoading} autoFocus required />
+   602→                        <button type="button" onClick={() => setRpShowPassword(!rpShowPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+   603→                          {rpShowPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+   604→                        </button>
+   605→                      </div>
+   606→                      <PasswordStrengthIndicator password={rpPassword} />
+   607→                    </div>
+   608→                    <div className="space-y-2">
+   609→                      <Label className="text-sm font-medium text-gray-700">Confirm Password <span className="text-red-500">*</span></Label>
+   610→                      <div className="relative">
+   611→                        <Input type={rpShowConfirm ? 'text' : 'password'} value={rpConfirmPassword} onChange={(e) => { setRpConfirmPassword(e.target.value); if (rpError) setRpError('') }}
+   612→                          placeholder="Confirm new password" className="h-11 rounded-lg pr-10" disabled={rpLoading} required />
+   613→                        <button type="button" onClick={() => setRpShowConfirm(!rpShowConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+   614→                          {rpShowConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+   615→                        </button>
+   616→                      </div>
+   617→                      {rpConfirmPassword && rpPassword && rpConfirmPassword !== rpPassword && (
+   618→                        <p className="text-xs text-red-500">Passwords do not match</p>
+   619→                      )}
+   620→                      {rpConfirmPassword && rpPassword && rpConfirmPassword === rpPassword && (
+   621→                        <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="size-3" />Passwords match</p>
+   622→                      )}
+   623→                    </div>
+   624→                    {rpError && (
+   625→                      <p className="text-sm text-red-500 flex items-center gap-1.5"><Info className="size-3.5 shrink-0" />{rpError}</p>
+   626→                    )}
+   627→                    <Button type="submit" disabled={rpLoading} className="w-full h-11 text-white font-semibold rounded-lg" style={{ backgroundColor: BLUE }}>
+   628→                      {rpLoading ? <Loader2 className="size-5 animate-spin" /> : <>Reset Password <ArrowRight className="size-4 ml-1" /></>}
+   629→                    </Button>
+   630→                  </form>
+   631→                )}
+   632→              </motion.div>
+   633→            )}
+   634→
+   635→            {/* ── Reset Success View ── */}
+   636→            {authView === 'reset-success' && (
+   637→              <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center text-center py-4">
+   638→                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
+   639→                  className="flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 mb-4">
+   640→                  <CheckCircle className="size-8 text-emerald-600" />
+   641→                </motion.div>
+   642→                <h2 className="text-xl font-bold text-emerald-900 mb-2">Password Reset!</h2>
+   643→                <p className="text-sm text-emerald-700 mb-6">Your password has been successfully reset. You can now sign in with your new password.</p>
+   644→                <Button onClick={goToLogin} className="text-white px-8" style={{ backgroundColor: BLUE }}>
+   645→                  Sign In Now <ArrowRight className="size-4 ml-1" />
+   646→                </Button>
+   647→              </motion.div>
+   648→            )}
+   649→          </AnimatePresence>
+   650→        </div>
+   651→      </DialogContent>
+   652→    </Dialog>
+   653→  )
+   654→}
+   655→
+   656→// ─── Navbar ──────────────────────────────────────────────────────────────────
+   657→function PublicNavbar({ data, activePage, onNavigate, onLoginClick }: {
+   658→  data: PortalData; activePage: PortalPage; onNavigate: (p: PortalPage) => void; onLoginClick: () => void
+   659→}) {
+   660→  const { setCurrentView, isAuthenticated, userRole } = useAppStore()
+   661→  const isPreviewing = isAuthenticated && (userRole === 'teacher' || userRole === 'platform_admin')
+   662→  const backView = userRole === 'platform_admin' ? 'admin' : 'cms'
+   663→  const orgInitials = data.organization.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+   664→
+   665→  const navItems: { key: PortalPage; label: string }[] = [
+   666→    { key: 'home', label: 'Home' },
+   667→    { key: 'courses', label: 'Courses' },
+   668→    { key: 'test-series', label: 'Test Series' },
+   669→    { key: 'docs', label: 'Docs' },
+   670→    { key: 'quick-links', label: 'Quick Links' },
+   671→  ]
+   672→  const moreItems: { key: PortalPage; label: string }[] = [
+   673→    { key: 'about', label: 'About Us' },
+   674→  ]
+   675→
+   676→  return (
+   677→    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+   678→      <div className="mx-auto max-w-7xl flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+   679→        {/* Logo */}
+   680→        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavigate('home')}>
+   681→          <div className="flex items-center justify-center w-9 h-9 rounded-lg text-white font-bold text-sm" style={{ backgroundColor: BLUE }}>
+   682→            {data.organization.logo ? (
+   683→              <img src={data.organization.logo} alt={data.organization.name} className="w-full h-full object-cover rounded-lg" />
+   684→            ) : orgInitials}
+   685→          </div>
+   686→          <div className="flex flex-col leading-none">
+   687→            <span className="text-base font-bold text-gray-900 tracking-tight line-clamp-1 max-w-[140px] sm:max-w-[200px]">{data.organization.name}</span>
+   688→            <span className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: BLUE }}>Student Portal</span>
+   689→          </div>
+   690→        </div>
+   691→
+   692→        {/* Desktop nav */}
+   693→        <nav className="hidden lg:flex items-center gap-1">
+   694→          {navItems.map(item => (
+   695→            <Button key={item.key} variant="ghost" size="sm"
+   696→              className={`font-medium transition-colors ${activePage === item.key ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
+   697→              onClick={() => onNavigate(item.key)}
+   698→            >{item.label}</Button>
+   699→          ))}
+   700→          <DropdownMenu>
+   701→            <DropdownMenuTrigger asChild>
+   702→              <Button variant="ghost" size="sm" className="text-gray-600 font-medium gap-1">More <ChevronDown className="size-3.5" /></Button>
+   703→            </DropdownMenuTrigger>
+   704→            <DropdownMenuContent align="end">
+   705→              {moreItems.map(item => (
+   706→                <DropdownMenuItem key={item.key} className="cursor-pointer" onClick={() => onNavigate(item.key)}>{item.label}</DropdownMenuItem>
+   707→              ))}
+   708→            </DropdownMenuContent>
+   709→          </DropdownMenu>
+   710→        </nav>
+   711→
+   712→        {/* Right side */}
+   713→        <div className="flex items-center gap-2">
+   714→          <Button variant="ghost" size="icon" className="text-gray-500 hidden sm:flex"><Search className="size-5" /></Button>
+   715→          {isPreviewing && (
+   716→            <Button variant="outline" size="sm" onClick={() => setCurrentView(backView as any)}
+   717→              className="hidden sm:flex items-center gap-1.5" style={{ borderColor: BLUE_BORDER, color: BLUE }}>
+   718→              <ExternalLink className="size-3.5" /> Back to {userRole === 'platform_admin' ? 'Admin' : 'CMS'}
+   719→            </Button>
+   720→          )}
+   721→          {!isAuthenticated ? (
+   722→            <Button size="sm" className="text-white gap-1.5" style={{ backgroundColor: BLUE }}
+   723→              onClick={onLoginClick}>
+   724→              <LogIn className="size-4" /> Login
+   725→            </Button>
+   726→          ) : (
+   727→            <Avatar className="hidden sm:flex size-8 cursor-pointer">
+   728→              <AvatarFallback className="text-sm font-semibold" style={{ backgroundColor: BLUE_LIGHT, color: BLUE }}>
+   729→                {useAppStore.getState().userName?.charAt(0).toUpperCase() || orgInitials.charAt(0)}
+   730→              </AvatarFallback>
+   731→            </Avatar>
+   732→          )}
+   733→
+   734→          {/* Mobile menu */}
+   735→          <Sheet>
+   736→            <SheetTrigger asChild>
+   737→              <Button variant="ghost" size="icon" className="lg:hidden text-gray-500"><Menu className="size-5" /></Button>
+   738→            </SheetTrigger>
+   739→            <SheetContent side="right" className="w-80 p-0">
+   740→              <SheetHeader className="p-6 pb-4 border-b">
+   741→                <SheetTitle>
+   742→                  <div className="flex items-center gap-2.5">
+   743→                    <div className="flex items-center justify-center w-9 h-9 rounded-lg text-white font-bold text-sm" style={{ backgroundColor: BLUE }}>{orgInitials}</div>
+   744→                    <div className="flex flex-col leading-none">
+   745→                      <span className="text-base font-bold text-gray-900 tracking-tight">{data.organization.name}</span>
+   746→                      <span className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: BLUE }}>Student Portal</span>
+   747→                    </div>
+   748→                  </div>
+   749→                </SheetTitle>
+   750→              </SheetHeader>
+   751→              <div className="flex flex-col p-4 gap-1">
+   752→                {[...navItems, ...moreItems].map(item => (
+   753→                  <SheetClose key={item.key} asChild>
+   754→                    <Button variant="ghost" className={`justify-start font-medium h-11 ${activePage === item.key ? 'text-blue-600 bg-blue-50' : 'text-gray-700'}`}
+   755→                      onClick={() => onNavigate(item.key)}>{item.label}</Button>
+   756→                  </SheetClose>
+   757→                ))}
+   758→                <div className="my-2 border-t" />
+   759→                {!isAuthenticated ? (
+   760→                  <Button className="text-white gap-1.5" style={{ backgroundColor: BLUE }} onClick={onLoginClick}>
+   761→                    <LogIn className="size-4" /> Login
+   762→                  </Button>
+   763→                ) : isPreviewing ? (
+   764→                  <SheetClose asChild>
+   765→                    <Button variant="outline" className="justify-start gap-2" onClick={() => setCurrentView(backView as any)}>
+   766→                      <ExternalLink className="size-4" />Back to {userRole === 'platform_admin' ? 'Admin' : 'CMS'}
+   767→                    </Button>
+   768→                  </SheetClose>
+   769→                ) : null}
+   770→              </div>
+   771→            </SheetContent>
+   772→          </Sheet>
+   773→        </div>
+   774→      </div>
+   775→    </header>
+   776→  )
+   777→}
+   778→
+   779→// ─── Hero Banner Carousel ───────────────────────────────────────────────────
+   780→function HeroBanner({ data }: { data: PortalData }) {
+   781→  const [api, setApi] = useState<CarouselApi>()
+   782→  const [current, setCurrent] = useState(0)
+   783→  const bannerSlides = data.banners.length > 0
+   784→    ? data.banners.map((b, i) => ({
+   785→        id: b.id, title: b.title, subtitle: `Welcome to ${data.organization.name}`,
+   786→        cta: 'Explore Now', gradient: heroGradients[i % heroGradients.length], image: b.image, link: b.link,
+   787→      }))
+   788→    : [
+   789→        { id: 'd1', title: `Welcome to ${data.organization.name}`, subtitle: 'Discover courses crafted by expert educators', cta: 'Explore Courses', gradient: heroGradients[0], image: null, link: null },
+   790→        { id: 'd2', title: 'Ace Your Exams with Test Series', subtitle: 'Practice with comprehensive mock tests', cta: 'Start Testing', gradient: heroGradients[1], image: null, link: null },
+   791→        { id: 'd3', title: 'Learn Anytime, Anywhere', subtitle: 'Access study material on the go', cta: 'Get Started', gradient: heroGradients[2], image: null, link: null },
+   792→      ]
+   793→
+   794→  useEffect(() => {
+   795→    if (!api) return
+   796→    const h = () => setCurrent(api.selectedScrollSnap())
+   797→    api.on('select', h)
+   798→    return () => { api.off('select', h) }
+   799→  }, [api])
+   800→
+   801→  useEffect(() => {
+   802→    if (!api) return
+   803→    const i = setInterval(() => api.scrollNext(), 5000)
+   804→    return () => clearInterval(i)
+   805→  }, [api])
+   806→
+   807→  return (
+   808→    <section className="w-full">
+   809→      <Carousel setApi={setApi} opts={{ loop: true, align: 'start' }} className="w-full">
+   810→        <CarouselContent>
+   811→          {bannerSlides.map(banner => (
+   812→            <CarouselItem key={banner.id}>
+   813→              <div className={`relative overflow-hidden bg-gradient-to-r ${banner.gradient} rounded-xl sm:rounded-2xl mx-4 sm:mx-6 lg:mx-8 my-4 sm:my-6`}>
+   814→                <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-white/10" />
+   815→                <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-white/10" />
+   816→                {banner.image && (
+   817→                  <img src={banner.image} alt={banner.title} className="absolute inset-0 w-full h-full object-cover opacity-20" />
+   818→                )}
+   819→                <div className="relative z-10 px-6 py-12 sm:px-12 sm:py-16 lg:px-20 lg:py-20 flex flex-col items-start gap-4 sm:gap-6">
+   820→                  <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+   821→                    className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white leading-tight max-w-xl">{banner.title}</motion.h1>
+   822→                  <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+   823→                    className="text-white/90 text-sm sm:text-base max-w-lg">{banner.subtitle}</motion.p>
+   824→                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+   825→                    <Button size="lg" className="bg-white text-blue-700 hover:bg-white/90 font-semibold rounded-lg shadow-lg mt-2">
+   826→                      {banner.cta} <ArrowRight className="size-4 ml-1" />
+   827→                    </Button>
+   828→                  </motion.div>
+   829→                </div>
+   830→              </div>
+   831→            </CarouselItem>
+   832→          ))}
+   833→        </CarouselContent>
+   834→      </Carousel>
+   835→      <div className="flex items-center justify-center gap-2 mt-2 mb-4">
+   836→        {bannerSlides.map((_, idx) => (
+   837→          <button key={idx} className={`h-2 rounded-full transition-all duration-300 ${idx === current ? 'w-8' : 'w-2 bg-gray-300'}`}
+   838→            style={idx === current ? { backgroundColor: BLUE } : undefined} aria-label={`Slide ${idx + 1}`} />
+   839→        ))}
+   840→      </div>
+   841→    </section>
+   842→  )
+   843→}
+   844→
+   845→// ─── Browse Tiles ────────────────────────────────────────────────────────────
+   846→function BrowseTiles({ data, onNavigate }: { data: PortalData; onNavigate: (p: PortalPage) => void }) {
+   847→  const tiles = [
+   848→    { icon: BookOpen, label: 'Courses', count: data.courses.length, page: 'courses' as PortalPage, gradient: 'from-blue-500 to-blue-600' },
+   849→    { icon: ClipboardList, label: 'Test Series', count: data.testSeries.length, page: 'test-series' as PortalPage, gradient: 'from-indigo-500 to-indigo-600' },
+   850→    { icon: FileText, label: 'Study Material', count: data.categories.length, page: 'docs' as PortalPage, gradient: 'from-sky-500 to-sky-600' },
+   851→    { icon: Link2, label: 'Quick Links', count: data.quickLinks.length, page: 'quick-links' as PortalPage, gradient: 'from-cyan-500 to-cyan-600' },
+   852→  ]
+   853→
+   854→  return (
+   855→    <section className="px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+   856→      <div className="mx-auto max-w-7xl">
+   857→        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Browse by Category</h2>
+   858→        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+   859→          {tiles.map(tile => (
+   860→            <motion.div key={tile.label} whileHover={{ y: -4 }} whileTap={{ scale: 0.98 }}
+   861→              className="cursor-pointer" onClick={() => onNavigate(tile.page)}>
+   862→              <Card className="border border-gray-100 rounded-xl overflow-hidden transition-shadow hover:shadow-lg py-0">
+   863→                <CardContent className="p-4 sm:p-5 flex items-center gap-4">
+   864→                  <div className={`flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${tile.gradient} text-white shrink-0`}>
+   865→                    <tile.icon className="size-6" />
+   866→                  </div>
+   867→                  <div className="min-w-0">
+   868→                    <p className="font-semibold text-gray-900 text-sm sm:text-base truncate">{tile.label}</p>
+   869→                    <p className="text-xs sm:text-sm text-gray-500">{tile.count} items</p>
+   870→                  </div>
+   871→                </CardContent>
+   872→              </Card>
+   873→            </motion.div>
+   874→          ))}
+   875→        </div>
+   876→      </div>
+   877→    </section>
+   878→  )
+   879→}
+   880→
+   881→// ─── Featured Test Series ───────────────────────────────────────────────────
+   882→function FeaturedSection({ data, onNavigate, onLoginClick }: { data: PortalData; onNavigate: (p: PortalPage) => void; onLoginClick: () => void }) {
+   883→  const { isAuthenticated, openCheckout } = useAppStore()
+   884→  if (data.testSeries.length === 0) return null
+   885→
+   886→  return (
+   887→    <section className="px-4 sm:px-6 lg:px-8 py-10 sm:py-14 bg-blue-50/30">
+   888→      <div className="mx-auto max-w-7xl">
+   889→        <div className="flex items-center justify-between mb-8">
+   890→          <div>
+   891→            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Featured Test Series</h2>
+   892→            <p className="text-gray-500 mt-1 text-sm">Top picks to boost your exam preparation</p>
+   893→          </div>
+   894→          <Button variant="outline" className="hidden sm:flex items-center gap-1.5"
+   895→            style={{ color: BLUE, borderColor: BLUE_BORDER }} onClick={() => onNavigate('test-series')}>
+   896→            View All <ArrowRight className="size-3.5" />
+   897→          </Button>
+   898→        </div>
+   899→        <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-4 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 scrollbar-thin">
+   900→          {data.testSeries.slice(0, 6).map((item, idx) => (
+   901→            <motion.div key={item.id} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.1 }}
+   902→              className="flex-shrink-0 w-64 sm:w-72">
+   903→              <Card className="group cursor-pointer border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg py-0">
+   904→                <div className={`relative h-36 sm:h-40 bg-gradient-to-br ${cardGradients[idx % cardGradients.length]} flex items-center justify-center`}>
+   905→                  {item.thumbnail ? (
+   906→                    <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
+   907→                  ) : (
+   908→                    <ClipboardList className="size-12 text-white/80" />
+   909→                  )}
+   910→                  <Badge className="absolute top-3 left-3 bg-white/90 text-gray-800 text-xs font-semibold">{tags[idx % tags.length]}</Badge>
+   911→                  {item.isCombo && <Badge className="absolute top-3 right-3 bg-amber-500 text-white text-xs font-semibold">Combo</Badge>}
+   912→                </div>
+   913→                <CardContent className="p-4 flex flex-col gap-3">
+   914→                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{item.title}</h3>
+   915→                  <div className="flex items-center gap-2">
+   916→                    <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-600">{item.testCount} Tests</Badge>
+   917→                    {item.category && <Badge variant="secondary" className="text-xs" style={{ backgroundColor: BLUE_LIGHT, color: BLUE }}>{item.category}</Badge>}
+   918→                  </div>
+   919→                  <div className="flex items-end gap-2">
+   920→                    <span className="text-lg font-bold text-gray-900">&#8377;{item.price}</span>
+   921→                    {item.mrp > item.price && (
+   922→                      <><span className="text-sm text-gray-400 line-through">&#8377;{item.mrp}</span>
+   923→                        <span className="text-xs font-semibold text-emerald-600">{Math.round(((item.mrp - item.price) / item.mrp) * 100)}% off</span></>
+   924→                    )}
+   925→                  </div>
+   926→                  <Button className="w-full font-semibold rounded-lg text-white" style={{ backgroundColor: BLUE }}
+   927→                    onClick={() => !isAuthenticated ? onLoginClick() : openCheckout({ id: item.id, type: 'test_series', title: item.title, price: item.price, mrp: item.mrp, thumbnail: item.thumbnail })}>Buy Now</Button>
+   928→                </CardContent>
+   929→              </Card>
+   930→            </motion.div>
+   931→          ))}
+   932→        </div>
+   933→      </div>
+   934→    </section>
+   935→  )
+   936→}
+   937→
+   938→// ─── Courses Section ─────────────────────────────────────────────────────────
+   939→function CoursesSection({ data, onNavigate, onLoginClick }: { data: PortalData; onNavigate: (p: PortalPage) => void; onLoginClick: () => void }) {
+   940→  const { isAuthenticated, openCheckout } = useAppStore()
+   941→  if (data.courses.length === 0) return null
+   942→
+   943→  return (
+   944→    <section className="px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+   945→      <div className="mx-auto max-w-7xl">
+   946→        <div className="flex items-center justify-between mb-8">
+   947→          <div>
+   948→            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Popular Courses</h2>
+   949→            <p className="text-gray-500 mt-1 text-sm">Learn from the best educators</p>
+   950→          </div>
+   951→          <Button variant="outline" className="hidden sm:flex items-center gap-1.5"
+   952→            style={{ color: BLUE, borderColor: BLUE_BORDER }} onClick={() => onNavigate('courses')}>
+   953→            View All <ArrowRight className="size-3.5" />
+   954→          </Button>
+   955→        </div>
+   956→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+   957→          {data.courses.slice(0, 6).map((course, idx) => (
+   958→            <motion.div key={course.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.08 }}>
+   959→              <Card className="group cursor-pointer border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg py-0">
+   960→                <div className="relative h-40 flex items-center justify-center" style={{ backgroundColor: BLUE_LIGHT }}>
+   961→                  {course.thumbnail ? (
+   962→                    <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+   963→                  ) : (
+   964→                    <BookOpen className="size-12" style={{ color: BLUE, opacity: 0.4 }} />
+   965→                  )}
+   966→                  {course.category && <Badge className="absolute top-3 left-3 text-xs text-white" style={{ backgroundColor: BLUE }}>{course.category}</Badge>}
+   967→                </div>
+   968→                <CardContent className="p-4 flex flex-col gap-3">
+   969→                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{course.title}</h3>
+   970→                  <div className="flex items-end gap-2">
+   971→                    <span className="text-lg font-bold text-gray-900">&#8377;{course.price}</span>
+   972→                    {course.mrp > course.price && (
+   973→                      <><span className="text-sm text-gray-400 line-through">&#8377;{course.mrp}</span>
+   974→                        <span className="text-xs font-semibold text-emerald-600">{Math.round(((course.mrp - course.price) / course.mrp) * 100)}% off</span></>
+   975→                    )}
+   976→                  </div>
+   977→                  <Button variant="outline" className="w-full font-semibold rounded-lg"
+   978→                    style={{ borderColor: BLUE_BORDER, color: BLUE }}
+   979→                    onClick={() => !isAuthenticated ? onLoginClick() : openCheckout({ id: course.id, type: 'course', title: course.title, price: course.price, mrp: course.mrp, thumbnail: course.thumbnail })}>Enroll Now</Button>
+   980→                </CardContent>
+   981→              </Card>
+   982→            </motion.div>
+   983→          ))}
+   984→        </div>
+   985→      </div>
+   986→    </section>
+   987→  )
+   988→}
+   989→
+   990→// ─── Full Courses List Page ──────────────────────────────────────────────────
+   991→function CoursesListPage({ data, onLoginClick }: { data: PortalData; onLoginClick: () => void }) {
+   992→  const { isAuthenticated, openCheckout } = useAppStore()
+   993→  const [search, setSearch] = useState('')
+   994→  const [selectedCat, setSelectedCat] = useState<string | null>(null)
+   995→  const allCats = [...new Set(data.courses.map(c => c.category).filter(Boolean))]
+   996→  const filtered = data.courses.filter(c => {
+   997→    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false
+   998→    if (selectedCat && c.category !== selectedCat) return false
+   999→    return true
+  1000→  })
+  1001→
+  1002→  return (
+  1003→    <div className="px-4 sm:px-6 lg:px-8 py-8">
+  1004→      <div className="mx-auto max-w-7xl">
+  1005→        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">All Courses</h2>
+  1006→        <p className="text-gray-500 text-sm mb-6">{data.courses.length} courses available</p>
+  1007→        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+  1008→          <div className="relative flex-1">
+  1009→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+  1010→            <Input placeholder="Search courses..." value={search} onChange={e => setSearch(e.target.value)}
+  1011→              className="pl-10 h-10 rounded-lg border-gray-200" />
+  1012→          </div>
+  1013→          <div className="flex gap-2 overflow-x-auto pb-1">
+  1014→            <Button variant={selectedCat === null ? 'default' : 'outline'} size="sm"
+  1015→              className={`shrink-0 rounded-full ${selectedCat === null ? 'text-white' : ''}`}
+  1016→              style={selectedCat === null ? { backgroundColor: BLUE } : { borderColor: BLUE_BORDER, color: BLUE }}
+  1017→              onClick={() => setSelectedCat(null)}>All</Button>
+  1018→            {allCats.map(cat => (
+  1019→              <Button key={cat} variant={selectedCat === cat ? 'default' : 'outline'} size="sm"
+  1020→                className={`shrink-0 rounded-full ${selectedCat === cat ? 'text-white' : ''}`}
+  1021→                style={selectedCat === cat ? { backgroundColor: BLUE } : { borderColor: BLUE_BORDER, color: BLUE }}
+  1022→                onClick={() => setSelectedCat(cat)}>{cat}</Button>
+  1023→            ))}
+  1024→          </div>
+  1025→        </div>
+  1026→        {filtered.length === 0 ? (
+  1027→          <div className="text-center py-16"><BookOpen className="size-12 text-gray-300 mx-auto mb-4" />
+  1028→            <p className="text-gray-500">No courses found</p></div>
+  1029→        ) : (
+  1030→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+  1031→            {filtered.map((course, idx) => (
+  1032→              <motion.div key={course.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+  1033→                <Card className="group cursor-pointer border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg py-0">
+  1034→                  <div className="relative h-40 flex items-center justify-center" style={{ backgroundColor: BLUE_LIGHT }}>
+  1035→                    {course.thumbnail ? <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+  1036→                      : <BookOpen className="size-12" style={{ color: BLUE, opacity: 0.4 }} />}
+  1037→                    {course.category && <Badge className="absolute top-3 left-3 text-xs text-white" style={{ backgroundColor: BLUE }}>{course.category}</Badge>}
+  1038→                  </div>
+  1039→                  <CardContent className="p-4 flex flex-col gap-3">
+  1040→                    <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{course.title}</h3>
+  1041→                    <div className="flex items-end gap-2">
+  1042→                      <span className="text-lg font-bold text-gray-900">&#8377;{course.price}</span>
+  1043→                      {course.mrp > course.price && <><span className="text-sm text-gray-400 line-through">&#8377;{course.mrp}</span>
+  1044→                        <span className="text-xs font-semibold text-emerald-600">{Math.round(((course.mrp - course.price) / course.mrp) * 100)}% off</span></>}
+  1045→                    </div>
+  1046→                    <Button variant="outline" className="w-full font-semibold rounded-lg"
+  1047→                      style={{ borderColor: BLUE_BORDER, color: BLUE }}
+  1048→                      onClick={() => !isAuthenticated ? onLoginClick() : openCheckout({ id: course.id, type: 'course', title: course.title, price: course.price, mrp: course.mrp, thumbnail: course.thumbnail })}>Enroll Now</Button>
+  1049→                  </CardContent>
+  1050→                </Card>
+  1051→              </motion.div>
+  1052→            ))}
+  1053→          </div>
+  1054→        )}
+  1055→      </div>
+  1056→    </div>
+  1057→  )
+  1058→}
+  1059→
+  1060→// ─── Full Test Series List Page ──────────────────────────────────────────────
+  1061→function TestSeriesListPage({ data, onLoginClick }: { data: PortalData; onLoginClick: () => void }) {
+  1062→  const { isAuthenticated, openCheckout } = useAppStore()
+  1063→  const [search, setSearch] = useState('')
+  1064→  const filtered = data.testSeries.filter(ts => !search || ts.title.toLowerCase().includes(search.toLowerCase()))
+  1065→
+  1066→  return (
+  1067→    <div className="px-4 sm:px-6 lg:px-8 py-8">
+  1068→      <div className="mx-auto max-w-7xl">
+  1069→        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">All Test Series</h2>
+  1070→        <p className="text-gray-500 text-sm mb-6">{data.testSeries.length} test series available</p>
+  1071→        <div className="relative mb-6 max-w-md">
+  1072→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+  1073→          <Input placeholder="Search test series..." value={search} onChange={e => setSearch(e.target.value)}
+  1074→            className="pl-10 h-10 rounded-lg border-gray-200" />
+  1075→        </div>
+  1076→        {filtered.length === 0 ? (
+  1077→          <div className="text-center py-16"><ClipboardList className="size-12 text-gray-300 mx-auto mb-4" />
+  1078→            <p className="text-gray-500">No test series found</p></div>
+  1079→        ) : (
+  1080→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+  1081→            {filtered.map((item, idx) => (
+  1082→              <motion.div key={item.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+  1083→                <Card className="group cursor-pointer border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg py-0">
+  1084→                  <div className={`relative h-36 bg-gradient-to-br ${cardGradients[idx % cardGradients.length]} flex items-center justify-center`}>
+  1085→                    {item.thumbnail ? <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
+  1086→                      : <ClipboardList className="size-12 text-white/80" />}
+  1087→                    <Badge className="absolute top-3 left-3 bg-white/90 text-gray-800 text-xs font-semibold">{tags[idx % tags.length]}</Badge>
+  1088→                    {item.isCombo && <Badge className="absolute top-3 right-3 bg-amber-500 text-white text-xs font-semibold">Combo</Badge>}
+  1089→                  </div>
+  1090→                  <CardContent className="p-4 flex flex-col gap-3">
+  1091→                    <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{item.title}</h3>
+  1092→                    <div className="flex items-center gap-2">
+  1093→                      <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-600">{item.testCount} Tests</Badge>
+  1094→                      {item.category && <Badge variant="secondary" className="text-xs" style={{ backgroundColor: BLUE_LIGHT, color: BLUE }}>{item.category}</Badge>}
+  1095→                    </div>
+  1096→                    <div className="flex items-end gap-2">
+  1097→                      <span className="text-lg font-bold text-gray-900">&#8377;{item.price}</span>
+  1098→                      {item.mrp > item.price && <><span className="text-sm text-gray-400 line-through">&#8377;{item.mrp}</span>
+  1099→                        <span className="text-xs font-semibold text-emerald-600">{Math.round(((item.mrp - item.price) / item.mrp) * 100)}% off</span></>}
+  1100→                    </div>
+  1101→                    <Button className="w-full font-semibold rounded-lg text-white" style={{ backgroundColor: BLUE }}
+  1102→                      onClick={() => !isAuthenticated ? onLoginClick() : openCheckout({ id: item.id, type: 'test_series', title: item.title, price: item.price, mrp: item.mrp, thumbnail: item.thumbnail })}>Buy Now</Button>
+  1103→                  </CardContent>
+  1104→                </Card>
+  1105→              </motion.div>
+  1106→            ))}
+  1107→          </div>
+  1108→        )}
+  1109→      </div>
+  1110→    </div>
+  1111→  )
+  1112→}
+  1113→
+  1114→// ─── Docs Page ──────────────────────────────────────────────────────────────
+  1115→function DocsPage({ data }: { data: PortalData }) {
+  1116→  return (
+  1117→    <div className="px-4 sm:px-6 lg:px-8 py-8">
+  1118→      <div className="mx-auto max-w-7xl">
+  1119→        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Study Material & Docs</h2>
+  1120→        <p className="text-gray-500 text-sm mb-6">Browse study resources organized by category</p>
+  1121→        {data.categories.length === 0 ? (
+  1122→          <div className="text-center py-16"><FileText className="size-12 text-gray-300 mx-auto mb-4" />
+  1123→            <p className="text-gray-500">No categories available yet</p></div>
+  1124→        ) : (
+  1125→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+  1126→            {data.categories.map((cat, idx) => (
+  1127→              <motion.div key={cat.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+  1128→                <Card className="border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg cursor-pointer py-0">
+  1129→                  <CardContent className="p-5 flex items-center gap-4">
+  1130→                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${cardGradients[idx % cardGradients.length]} text-white shrink-0`}>
+  1131→                      <BookMarked className="size-6" />
+  1132→                    </div>
+  1133→                    <div className="min-w-0 flex-1">
+  1134→                      <h3 className="font-semibold text-gray-900 text-sm">{cat.name}</h3>
+  1135→                      <p className="text-xs text-gray-500 mt-0.5">{cat.slug}</p>
+  1136→                    </div>
+  1137→                    <ChevronRight className="size-5 text-gray-400 shrink-0" />
+  1138→                  </CardContent>
+  1139→                </Card>
+  1140→              </motion.div>
+  1141→            ))}
+  1142→          </div>
+  1143→        )}
+  1144→      </div>
+  1145→    </div>
+  1146→  )
+  1147→}
+  1148→
+  1149→// ─── Quick Links Page ───────────────────────────────────────────────────────
+  1150→function QuickLinksPage({ data }: { data: PortalData }) {
+  1151→  return (
+  1152→    <div className="px-4 sm:px-6 lg:px-8 py-8">
+  1153→      <div className="mx-auto max-w-7xl">
+  1154→        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Quick Links</h2>
+  1155→        <p className="text-gray-500 text-sm mb-6">Important links and resources</p>
+  1156→        {data.quickLinks.length === 0 ? (
+  1157→          <div className="text-center py-16"><Link2 className="size-12 text-gray-300 mx-auto mb-4" />
+  1158→            <p className="text-gray-500">No quick links available yet</p></div>
+  1159→        ) : (
+  1160→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1161→            {data.quickLinks.map((link, idx) => (
+  1162→              <motion.div key={link.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
+  1163→                <a href={link.url} target="_blank" rel="noopener noreferrer">
+  1164→                  <Card className="border border-gray-100 rounded-xl overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-blue-200 py-0">
+  1165→                    <CardContent className="p-4 flex items-center gap-3">
+  1166→                      <div className="flex items-center justify-center w-10 h-10 rounded-lg text-white shrink-0" style={{ backgroundColor: BLUE }}>
+  1167→                        <Link2 className="size-5" />
+  1168→                      </div>
+  1169→                      <div className="min-w-0 flex-1">
+  1170→                        <h3 className="font-medium text-gray-900 text-sm truncate">{link.title}</h3>
+  1171→                      </div>
+  1172→                      <ExternalLink className="size-4 text-gray-400 shrink-0" />
+  1173→                    </CardContent>
+  1174→                  </Card>
+  1175→                </a>
+  1176→              </motion.div>
+  1177→            ))}
+  1178→          </div>
+  1179→        )}
+  1180→      </div>
+  1181→    </div>
+  1182→  )
+  1183→}
+  1184→
+  1185→// ─── About Page ─────────────────────────────────────────────────────────────
+  1186→function AboutPage({ data, onLoginClick }: { data: PortalData; onLoginClick: () => void }) {
+  1187→  const orgInitials = data.organization.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  1188→
+  1189→  return (
+  1190→    <div className="px-4 sm:px-6 lg:px-8 py-8">
+  1191→      <div className="mx-auto max-w-3xl">
+  1192→        <div className="text-center mb-10">
+  1193→          <div className="flex items-center justify-center w-20 h-20 rounded-2xl text-white font-bold text-2xl mx-auto mb-4"
+  1194→            style={{ backgroundColor: BLUE }}>
+  1195→            {data.organization.logo ? (
+  1196→              <img src={data.organization.logo} alt={data.organization.name} className="w-full h-full object-cover rounded-2xl" />
+  1197→            ) : orgInitials}
+  1198→          </div>
+  1199→          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{data.organization.name}</h2>
+  1200→          <p className="text-gray-500 mt-2">Empowering education through technology</p>
+  1201→        </div>
+  1202→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+  1203→          {[
+  1204→            { icon: BookOpen, label: 'Courses', value: data.courses.length },
+  1205→            { icon: ClipboardList, label: 'Test Series', value: data.testSeries.length },
+  1206→            { icon: FileText, label: 'Categories', value: data.categories.length },
+  1207→            { icon: Link2, label: 'Quick Links', value: data.quickLinks.length },
+  1208→          ].map(stat => (
+  1209→            <Card key={stat.label} className="border border-gray-100 rounded-xl text-center py-0">
+  1210→              <CardContent className="p-4 flex flex-col items-center gap-2">
+  1211→                <stat.icon className="size-6" style={{ color: BLUE }} />
+  1212→                <span className="text-2xl font-bold text-gray-900">{stat.value}</span>
+  1213→                <span className="text-xs text-gray-500">{stat.label}</span>
+  1214→              </CardContent>
+  1215→            </Card>
+  1216→          ))}
+  1217→        </div>
+  1218→        <Card className="border border-gray-100 rounded-xl py-0">
+  1219→          <CardContent className="p-6">
+  1220→            <h3 className="font-bold text-gray-900 text-lg mb-4">About Our Platform</h3>
+  1221→            <p className="text-gray-600 leading-relaxed mb-4">
+  1222→              {data.organization.name} provides a comprehensive learning platform designed to help students
+  1223→              achieve their academic goals. Our expert educators create high-quality courses and test series
+  1224→              that cover all essential topics and exam patterns.
+  1225→            </p>
+  1226→            <p className="text-gray-600 leading-relaxed mb-6">
+  1227→              Join thousands of students who trust us for their exam preparation. Access courses, practice
+  1228→              tests, and study material — all in one place.
+  1229→            </p>
+  1230→            <div className="flex flex-col sm:flex-row gap-3">
+  1231→              <Button className="text-white gap-2" style={{ backgroundColor: BLUE }}
+  1232→                onClick={() => onLoginClick()}>
+  1233→                <LogIn className="size-4" /> Login to Get Started
+  1234→              </Button>
+  1235→              <Button variant="outline" style={{ borderColor: BLUE_BORDER, color: BLUE }} className="gap-2">
+  1236→                <Mail className="size-4" /> Contact Us
+  1237→              </Button>
+  1238→            </div>
+  1239→          </CardContent>
+  1240→        </Card>
+  1241→      </div>
+  1242→    </div>
+  1243→  )
+  1244→}
+  1245→
+  1246→// ─── Footer ──────────────────────────────────────────────────────────────────
+  1247→function Footer({ data }: { data: PortalData }) {
+  1248→  const orgInitials = data.organization.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  1249→
+  1250→  return (
+  1251→    <footer className="bg-[#111827] text-gray-300">
+  1252→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
+  1253→        <div className="flex flex-col items-center gap-6">
+  1254→          {/* Org logo and name */}
+  1255→          <div className="flex items-center gap-2.5">
+  1256→            <div className="flex items-center justify-center w-9 h-9 rounded-lg text-white font-bold text-sm" style={{ backgroundColor: BLUE }}>
+  1257→              {data.organization.logo ? (
+  1258→                <img src={data.organization.logo} alt={data.organization.name} className="w-full h-full object-cover rounded-lg" />
+  1259→              ) : orgInitials}
+  1260→            </div>
+  1261→            <span className="text-base font-bold text-white">{data.organization.name}</span>
+  1262→          </div>
+  1263→
+  1264→          {/* Legal links */}
+  1265→          <div className="flex items-center gap-6 text-sm">
+  1266→            <a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a>
+  1267→            <span className="text-gray-700">•</span>
+  1268→            <a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a>
+  1269→            <span className="text-gray-700">•</span>
+  1270→            <a href="#" className="text-gray-400 hover:text-white transition-colors">Refund Policy</a>
+  1271→          </div>
+  1272→
+  1273→          {/* Google Play badge placeholder */}
+  1274→          <a href="#" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 transition-colors">
+  1275→            <Smartphone className="size-5 text-white" />
+  1276→            <div className="flex flex-col leading-none">
+  1277→              <span className="text-[9px] text-gray-400 uppercase tracking-wider">Get it on</span>
+  1278→              <span className="text-sm font-semibold text-white">Google Play</span>
+  1279→            </div>
+  1280→          </a>
+  1281→
+  1282→          {/* Copyright */}
+  1283→          <div className="flex flex-col sm:flex-row items-center gap-2 pt-4 border-t border-gray-800 w-full justify-center">
+  1284→            <p className="text-gray-500 text-sm">&copy; {new Date().getFullYear()} {data.organization.name}. All Rights Reserved.</p>
+  1285→            <p className="text-gray-600 text-xs">Powered by <span style={{ color: BLUE }} className="font-medium">Er. Raju Kumawat Tech</span></p>
+  1286→          </div>
+  1287→        </div>
+  1288→      </div>
+  1289→    </footer>
+  1290→  )
+  1291→}
+  1292→
+  1293→// ─── Main Component ──────────────────────────────────────────────────────────
+  1294→export default function PublicPortal() {
+  1295→  const [data, setData] = useState<PortalData | null>(null)
+  1296→  const [loading, setLoading] = useState(true)
+  1297→  const [error, setError] = useState(false)
+  1298→  const [activePage, setActivePage] = useState<PortalPage>('home')
+  1299→  const [authDialogOpen, setAuthDialogOpen] = useState(false)
+  1300→  const [authInitialView, setAuthInitialView] = useState<AuthView>('login')
+  1301→
+  1302→  const openAuthDialog = useCallback((view?: AuthView) => {
+  1303→    setAuthInitialView(view || 'login')
+  1304→    setAuthDialogOpen(true)
+  1305→  }, [])
+  1306→
+  1307→  const fetchData = useCallback(async () => {
+  1308→    setLoading(true)
+  1309→    setError(false)
+  1310→    try {
+  1311→      const res = await fetch('/api/student/portal-data?orgCode=9680177120')
+  1312→      const json = await res.json()
+  1313→      if (json.success && json.data) {
+  1314→        setData(json.data)
+  1315→      } else {
+  1316→        setError(true)
+  1317→      }
+  1318→    } catch {
+  1319→      setError(true)
+  1320→    } finally {
+  1321→      setLoading(false)
+  1322→    }
+  1323→  }, [])
+  1324→
+  1325→  useEffect(() => { fetchData() }, [fetchData])
+  1326→
+  1327→  // Check for reset_token in URL on mount — auto-open auth dialog with reset view
+  1328→  useEffect(() => {
+  1329→    if (typeof window === 'undefined') return
+  1330→    const params = new URLSearchParams(window.location.search)
+  1331→    const token = params.get('reset_token')
+  1332→    if (token) {
+  1333→      openAuthDialog('reset-password')
+  1334→    }
+  1335→  }, [openAuthDialog])
+  1336→
+  1337→  // Check for redirect from main login after student password reset
+  1338→  useEffect(() => {
+  1339→    if (typeof window === 'undefined') return
+  1340→    const openStudentLogin = sessionStorage.getItem('erkt_open_student_login')
+  1341→    if (openStudentLogin === 'true') {
+  1342→      sessionStorage.removeItem('erkt_open_student_login')
+  1343→      // Small delay to ensure the component is fully mounted
+  1344→      setTimeout(() => openAuthDialog('login'), 100)
+  1345→    }
+  1346→  }, [openAuthDialog])
+  1347→
+  1348→  // Scroll to top on page change
+  1349→  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [activePage])
+  1350→
+  1351→  if (loading) {
+  1352→    return (
+  1353→      <div className="min-h-screen flex flex-col bg-white">
+  1354→        <NavbarSkeleton />
+  1355→        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
+  1356→          <div className="mx-auto max-w-7xl">
+  1357→            <Skeleton className="h-48 sm:h-64 rounded-2xl mb-8" />
+  1358→            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  1359→              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+  1360→            </div>
+  1361→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+  1362→              {[1, 2, 3].map(i => <CardSkeleton key={i} />)}
+  1363→            </div>
+  1364→          </div>
+  1365→        </div>
+  1366→      </div>
+  1367→    )
+  1368→  }
+  1369→
+  1370→  if (error || !data) {
+  1371→    return <ErrorState onRetry={fetchData} />
+  1372→  }
+  1373→
+  1374→  const renderPage = () => {
+  1375→    switch (activePage) {
+  1376→      case 'home':
+  1377→        return (
+  1378→          <>
+  1379→            <HeroBanner data={data} />
+  1380→            <BrowseTiles data={data} onNavigate={setActivePage} />
+  1381→            <FeaturedSection data={data} onNavigate={setActivePage} onLoginClick={openAuthDialog} />
+  1382→            <CoursesSection data={data} onNavigate={setActivePage} onLoginClick={openAuthDialog} />
+  1383→          </>
+  1384→        )
+  1385→      case 'courses':
+  1386→        return <CoursesListPage data={data} onLoginClick={openAuthDialog} />
+  1387→      case 'test-series':
+  1388→        return <TestSeriesListPage data={data} onLoginClick={openAuthDialog} />
+  1389→      case 'docs':
+  1390→        return <DocsPage data={data} />
+  1391→      case 'quick-links':
+  1392→        return <QuickLinksPage data={data} />
+  1393→      case 'about':
+  1394→        return <AboutPage data={data} onLoginClick={openAuthDialog} />
+  1395→      default:
+  1396→        return null
+  1397→    }
+  1398→  }
+  1399→
+  1400→  return (
+  1401→    <div className="min-h-screen flex flex-col bg-white">
+  1402→      <PublicNavbar data={data} activePage={activePage} onNavigate={setActivePage} onLoginClick={openAuthDialog} />
+  1403→      <main className="flex-1">
+  1404→        <AnimatePresence mode="wait">
+  1405→          <motion.div key={activePage} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+  1406→            {renderPage()}
+  1407→          </motion.div>
+  1408→        </AnimatePresence>
+  1409→      </main>
+  1410→      <Footer data={data} />
+  1411→      {/* Auth Dialog — Login, Forgot Password, Reset Password */}
+  1412→      <StudentAuthDialog
+  1413→        open={authDialogOpen}
+  1414→        onOpenChange={setAuthDialogOpen}
+  1415→        initialView={authInitialView}
+  1416→        orgData={data.organization}
+  1417→      />
+  1418→    </div>
+  1419→  )
+  1420→}
+  1421→

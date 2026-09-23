@@ -1,0 +1,771 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Plus, Search, Edit3, Trash2, Eye, EyeOff, BookOpen, Clock, Users,
+     7→     7→  ChevronLeft, ChevronRight, Loader2, X, Upload, Video, Image as ImageIcon,
+     8→     8→  Tag, DollarSign, Settings, FileText, Check, ArrowRight, ArrowLeft,
+     9→     9→  Star, Layers, Link2, Code, Save, MoreVertical, Copy, RefreshCw, Share2,
+    10→    10→  Lock, Unlock, Folder, FolderPlus, Radio, Monitor, FileEdit, Award,
+    11→    11→  Music, File, FileCode, ClipboardList, List, Grid3x3, Filter, Play,
+    12→    12→  Calendar
+    13→    13→} from 'lucide-react'
+    14→    14→import { apiFetch } from '@/lib/api-client'
+    15→    15→import { useAppStore } from '@/lib/store'
+    16→    16→import { Button } from '@/components/ui/button'
+    17→    17→import { Input } from '@/components/ui/input'
+    18→    18→import { Label } from '@/components/ui/label'
+    19→    19→import { Badge } from '@/components/ui/badge'
+    20→    20→import { Card, CardContent } from '@/components/ui/card'
+    21→    21→import { Switch } from '@/components/ui/switch'
+    22→    22→import { Textarea } from '@/components/ui/textarea'
+    23→    23→import {
+    24→    24→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+    25→    25→} from '@/components/ui/select'
+    26→    26→import {
+    27→    27→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+    28→    28→} from '@/components/ui/dialog'
+    29→    29→import {
+    30→    30→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    31→    31→  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+    32→    32→} from '@/components/ui/alert-dialog'
+    33→    33→import {
+    34→    34→  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    35→    35→  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+    36→    36→} from '@/components/ui/dropdown-menu'
+    37→    37→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    38→    38→import { toast } from 'sonner'
+    39→    39→import { CourseContentManager } from './course-content-manager'
+    40→    40→
+    41→    41→interface Course {
+    42→    42→  id: string
+    43→    43→  title: string
+    44→    44→  description: string | null
+    45→    45→  thumbnail: string | null
+    46→    46→  price: number
+    47→    47→  mrp: number
+    48→    48→  category: string | null
+    49→    49→  language: string
+    50→    50→  level: string
+    51→    51→  featured: boolean
+    52→    52→  status: string
+    53→    53→  createdAt: string
+    54→    54→  _count?: { purchasedBy: number }
+    55→    55→}
+    56→    56→
+    57→    57→const STEPS = [
+    58→    58→  { id: 1, label: 'Basic Info', icon: FileText },
+    59→    59→  { id: 2, label: 'Pricing', icon: DollarSign },
+    60→    60→  { id: 3, label: 'Content', icon: Layers },
+    61→    61→  { id: 4, label: 'Settings', icon: Settings },
+    62→    62→]
+    63→    63→
+    64→    64→const BULK_ACTIONS = [
+    65→    65→  { label: 'Add Folder', icon: FolderPlus, color: 'text-blue-500' },
+    66→    66→  { label: 'Add Link', icon: Link2, color: 'text-green-500' },
+    67→    67→  { label: 'Add Video', icon: Video, color: 'text-red-500' },
+    68→    68→  { label: 'Add PDF', icon: File, color: 'text-orange-500' },
+    69→    69→  { label: 'Add Test', icon: ClipboardList, color: 'text-amber-500' },
+    70→    70→  { label: 'Add Subjective Test', icon: FileEdit, color: 'text-indigo-500' },
+    71→    71→  { label: 'Add Quiz', icon: Award, color: 'text-yellow-500' },
+    72→    72→  { label: 'Add Image', icon: ImageIcon, color: 'text-pink-500' },
+    73→    73→  { label: 'Add Audio File', icon: Music, color: 'text-indigo-500' },
+    74→    74→  { label: 'Add Live Stream', icon: Radio, color: 'text-purple-500' },
+    75→    75→  { label: 'Add YouTube/Zoom Video', icon: Monitor, color: 'text-red-600' },
+    76→    76→  { label: 'Add Webinar.gg Live', icon: Radio, color: 'text-pink-500' },
+    77→    77→  { label: 'Add Document', icon: FileText, color: 'text-blue-500' },
+    78→    78→]
+    79→    79→
+    80→    80→export function CoursesList() {
+    81→    81→  const { orgCode } = useAppStore()
+    82→    82→  const [courses, setCourses] = useState<Course[]>([])
+    83→    83→  const [loading, setLoading] = useState(true)
+    84→    84→  const [error, setError] = useState('')
+    85→    85→  const [search, setSearch] = useState('')
+    86→    86→  const [page, setPage] = useState(1)
+    87→    87→  const [total, setTotal] = useState(0)
+    88→    88→  const [activeTab, setActiveTab] = useState('products')
+    89→    89→
+    90→    90→  // Wizard state
+    91→    91→  const [wizardOpen, setWizardOpen] = useState(false)
+    92→    92→  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+    93→    93→  const [currentStep, setCurrentStep] = useState(1)
+    94→    94→  const [saving, setSaving] = useState(false)
+    95→    95→
+    96→    96→  // Delete state
+    97→    97→  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null)
+    98→    98→
+    99→    99→  // Content management state
+   100→   100→  const [contentManagerCourse, setContentManagerCourse] = useState<Course | null>(null)
+   101→   101→
+   102→   102→  // Add content modal state
+   103→   103→  const [addModalType, setAddModalType] = useState<string | null>(null)
+   104→   104→
+   105→   105→  // Form data
+   106→   106→  const [formData, setFormData] = useState({
+   107→   107→    title: '', description: '', content: '', thumbnail: '', demoVideo: '',
+   108→   108→    price: '0', mrp: '0', category: '', language: 'Hindi', level: 'All',
+   109→   109→    featured: false, status: 'draft', validityType: 'lifetime',
+   110→   110→    validityMonths: '12', validityEndDate: '', discountCode: '', sortOrder: '0',
+   111→   111→  })
+   112→   112→
+   113→   113→  const fetchCourses = useCallback(async () => {
+   114→   114→    setLoading(true)
+   115→   115→    setError('')
+   116→   116→    try {
+   117→   117→      const params = new URLSearchParams({ page: String(page), limit: '20', ...(search ? { search } : {}) })
+   118→   118→      const res = await apiFetch(`/api/teacher/courses?${params}`)
+   119→   119→      if (!res.ok) throw new Error('Failed to fetch courses')
+   120→   120→      const data = await res.json()
+   121→   121→      setCourses(data.items || [])
+   122→   122→      setTotal(data.total || 0)
+   123→   123→    } catch { setError('Failed to load courses.') }
+   124→   124→    finally { setLoading(false) }
+   125→   125→  }, [page, search])
+   126→   126→
+   127→   127→  useEffect(() => { fetchCourses() }, [fetchCourses])
+   128→   128→
+   129→   129→  const openWizard = (course: Course | null) => {
+   130→   130→    setEditingCourse(course)
+   131→   131→    setCurrentStep(1)
+   132→   132→    if (course) {
+   133→   133→      setFormData({
+   134→   134→        title: course.title || '', description: '', content: '', thumbnail: course.thumbnail || '',
+   135→   135→        demoVideo: '', price: String(course.price || 0), mrp: String(course.mrp || 0),
+   136→   136→        category: course.category || '', language: course.language || 'Hindi', level: course.level || 'All',
+   137→   137→        featured: course.featured || false, status: course.status || 'draft',
+   138→   138→        validityType: 'lifetime', validityMonths: '12', validityEndDate: '', discountCode: '', sortOrder: '0',
+   139→   139→      })
+   140→   140→    } else {
+   141→   141→      setFormData({
+   142→   142→        title: '', description: '', content: '', thumbnail: '', demoVideo: '',
+   143→   143→        price: '0', mrp: '0', category: '', language: 'Hindi', level: 'All',
+   144→   144→        featured: false, status: 'draft', validityType: 'lifetime',
+   145→   145→        validityMonths: '12', validityEndDate: '', discountCode: '', sortOrder: '0',
+   146→   146→      })
+   147→   147→    }
+   148→   148→    setWizardOpen(true)
+   149→   149→  }
+   150→   150→
+   151→   151→  const handleSave = async (publish: boolean = false) => {
+   152→   152→    if (!formData.title.trim()) { toast.error('Course title is required'); setCurrentStep(1); return }
+   153→   153→    setSaving(true)
+   154→   154→    try {
+   155→   155→      const payload = {
+   156→   156→        ...formData,
+   157→   157→        price: parseFloat(formData.price) || 0,
+   158→   158→        mrp: parseFloat(formData.mrp) || 0,
+   159→   159→        validityMonths: formData.validityType === 'months' ? parseInt(formData.validityMonths) : null,
+   160→   160→        validityEndDate: formData.validityType === 'end_date' ? formData.validityEndDate : null,
+   161→   161→        status: publish ? 'published' : formData.status,
+   162→   162→      }
+   163→   163→      const url = editingCourse ? `/api/teacher/courses/${editingCourse.id}` : '/api/teacher/courses'
+   164→   164→      const method = editingCourse ? 'PUT' : 'POST'
+   165→   165→      const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+   166→   166→      const data = await res.json()
+   167→   167→      if (!res.ok) throw new Error(data.error || 'Failed to save')
+   168→   168→      toast.success(publish ? 'Course published!' : 'Course saved as draft')
+   169→   169→      setWizardOpen(false)
+   170→   170→      fetchCourses()
+   171→   171→    } catch (err: any) { toast.error(err.message || 'Failed to save course') }
+   172→   172→    finally { setSaving(false) }
+   173→   173→  }
+   174→   174→
+   175→   175→  const handleDelete = async () => {
+   176→   176→    if (!courseToDelete) return
+   177→   177→    try {
+   178→   178→      const res = await apiFetch(`/api/teacher/courses/${courseToDelete.id}`, { method: 'DELETE' })
+   179→   179→      if (!res.ok) throw new Error('Failed')
+   180→   180→      toast.success('Course deleted')
+   181→   181→      fetchCourses()
+   182→   182→    } catch { toast.error('Failed to delete') }
+   183→   183→    setCourseToDelete(null)
+   184→   184→  }
+   185→   185→
+   186→   186→  const togglePublish = async (course: Course) => {
+   187→   187→    try {
+   188→   188→      const res = await apiFetch(`/api/teacher/courses/${course.id}`, {
+   189→   189→        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+   190→   190→        body: JSON.stringify({ status: course.status === 'published' ? 'draft' : 'published' }),
+   191→   191→      })
+   192→   192→      if (!res.ok) throw new Error('Failed')
+   193→   193→      toast.success(course.status === 'published' ? 'Unpublished' : 'Published')
+   194→   194→      fetchCourses()
+   195→   195→    } catch { toast.error('Failed') }
+   196→   196→  }
+   197→   197→
+   198→   198→  const update = (key: string, value: any) => setFormData(prev => ({ ...prev, [key]: value }))
+   199→   199→
+   200→   200→  const handleImageUpload = async (file: File, field: 'thumbnail' | 'demoVideo') => {
+   201→   201→    if (!file) return
+   202→   202→    try {
+   203→   203→      const fd = new FormData(); fd.append('file', file)
+   204→   204→      const res = await apiFetch('/api/teacher/upload-image', { method: 'POST', body: fd })
+   205→   205→      const data = await res.json()
+   206→   206→      if (!res.ok) throw new Error(data.error)
+   207→   207→      update(field, data.url)
+   208→   208→      toast.success('Uploaded!')
+   209→   209→    } catch (err: any) { toast.error(err.message || 'Upload failed') }
+   210→   210→  }
+   211→   211→
+   212→   212→  // ── Content Manager ──
+   213→   213→  if (contentManagerCourse) {
+   214→   214→    return <CourseContentManager courseId={contentManagerCourse.id} courseTitle={contentManagerCourse.title} onBack={() => setContentManagerCourse(null)} />
+   215→   215→  }
+   216→   216→
+   217→   217→  // ── Loading ──
+   218→   218→  if (loading && courses.length === 0) {
+   219→   219→    return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />)}</div>
+   220→   220→  }
+   221→   221→
+   222→   222→  return (
+   223→   223→    <div className="space-y-4 sm:space-y-6">
+   224→   224→      {/* Header */}
+   225→   225→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   226→   226→        <div className="min-w-0">
+   227→   227→          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><BookOpen className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" /> <span className="truncate">Courses</span></h1>
+   228→   228→          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Manage your course catalog and content</p>
+   229→   229→        </div>
+   230→   230→        <div className="flex items-center gap-2 shrink-0">
+   231→   231→          <Button onClick={() => openWizard(null)} className="gap-2 bg-emerald-600 hover:bg-emerald-700 h-9 sm:h-10">
+   232→   232→            <Plus className="w-4 h-4" /> <span className="sm:inline">Add Course</span>
+   233→   233→          </Button>
+   234→   234→          {/* Bulk Actions 3-dot dropdown - uses Radix Portal so it won't be clipped */}
+   235→   235→          <DropdownMenu>
+   236→   236→            <DropdownMenuTrigger asChild>
+   237→   237→              <Button variant="outline" size="icon" title="Bulk Actions" className="h-9 w-9 sm:h-10 sm:w-10">
+   238→   238→                <MoreVertical className="w-4 h-4" />
+   239→   239→              </Button>
+   240→   240→            </DropdownMenuTrigger>
+   241→   241→            <DropdownMenuContent align="end" className="w-60 max-h-[400px] overflow-y-auto">
+   242→   242→              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase">Bulk Actions</DropdownMenuLabel>
+   243→   243→              <DropdownMenuSeparator />
+   244→   244→              {BULK_ACTIONS.map((item) => (
+   245→   245→                <DropdownMenuItem
+   246→   246→                  key={item.label}
+   247→   247→                  onClick={() => {
+   248→   248→                    setAddModalType(item.label.replace('Add ', '').replace(' Video', 'Video').toLowerCase().replace('/', ''))
+   249→   249→                    if (courses.length === 0) { toast.error('Create a course first'); return }
+   250→   250→                    setContentManagerCourse(courses[0])
+   251→   251→                  }}
+   252→   252→                  className="flex items-center gap-2 cursor-pointer"
+   253→   253→                >
+   254→   254→                  <item.icon className={`w-3.5 h-3.5 ${item.color}`} />
+   255→   255→                  <span>{item.label}</span>
+   256→   256→                </DropdownMenuItem>
+   257→   257→              ))}
+   258→   258→            </DropdownMenuContent>
+   259→   259→          </DropdownMenu>
+   260→   260→        </div>
+   261→   261→      </div>
+   262→   262→
+   263→   263→      {/* Tabs: Products | Live & Upcoming | Content */}
+   264→   264→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   265→   265→        <TabsList className="flex w-full max-w-full overflow-x-auto sm:w-auto">
+   266→   266→          <TabsTrigger value="products" className="flex-1 sm:flex-initial">Products</TabsTrigger>
+   267→   267→          <TabsTrigger value="live" className="flex-1 sm:flex-initial">Live & Upcoming</TabsTrigger>
+   268→   268→          <TabsTrigger value="content" className="flex-1 sm:flex-initial">Content</TabsTrigger>
+   269→   269→        </TabsList>
+   270→   270→
+   271→   271→        {/* ── Products Tab (Course Table) ── */}
+   272→   272→        <TabsContent value="products" className="space-y-4">
+   273→   273→          {/* Search */}
+   274→   274→          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+   275→   275→            <div className="relative flex-1 min-w-[180px] sm:max-w-md">
+   276→   276→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   277→   277→              <Input placeholder="Search courses..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className="pl-9 h-9 sm:h-10" />
+   278→   278→            </div>
+   279→   279→            <Button variant="outline" size="sm" className="gap-1 h-9 sm:h-10"><Filter className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Filters</span></Button>
+   280→   280→            <span className="text-xs sm:text-sm text-muted-foreground ml-auto sm:ml-0">{total} total</span>
+   281→   281→          </div>
+   282→   282→
+   283→   283→          {/* Table */}
+   284→   284→          {courses.length === 0 ? (
+   285→   285→            <Card><CardContent className="p-8 sm:p-12 text-center">
+   286→   286→              <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-muted-foreground/50 mb-3" />
+   287→   287→              <p className="text-sm sm:text-base text-muted-foreground mb-4">No courses yet</p>
+   288→   288→              <Button onClick={() => openWizard(null)} className="gap-2 bg-emerald-600 hover:bg-emerald-700"><Plus className="w-4 h-4" /> Create First Course</Button>
+   289→   289→            </CardContent></Card>
+   290→   290→          ) : (
+   291→   291→            <>
+   292→   292→              {/* Desktop Table (md and up) */}
+   293→   293→              <div className="hidden md:block rounded-lg border overflow-hidden">
+   294→   294→                <table className="w-full text-sm">
+   295→   295→                  <thead className="bg-muted/50 border-b">
+   296→   296→                    <tr>
+   297→   297→                      <th className="text-left px-4 py-3 font-medium">S.No</th>
+   298→   298→                      <th className="text-left px-4 py-3 font-medium">Product Name</th>
+   299→   299→                      <th className="text-left px-4 py-3 font-medium">Category</th>
+   300→   300→                      <th className="text-left px-4 py-3 font-medium">Price</th>
+   301→   301→                      <th className="text-left px-4 py-3 font-medium">Status</th>
+   302→   302→                      <th className="text-right px-4 py-3 font-medium">Actions</th>
+   303→   303→                    </tr>
+   304→   304→                  </thead>
+   305→   305→                  <tbody className="divide-y">
+   306→   306→                    {courses.map((course, idx) => (
+   307→   307→                      <tr key={course.id} className="hover:bg-muted/30 group">
+   308→   308→                        <td className="px-4 py-3 text-muted-foreground">{(page - 1) * 20 + idx + 1}</td>
+   309→   309→                        <td className="px-4 py-3">
+   310→   310→                          <div className="flex items-center gap-3">
+   311→   311→                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 flex items-center justify-center shrink-0 overflow-hidden">
+   312→   312→                              {course.thumbnail ? <img src={course.thumbnail} alt="" className="w-full h-full object-cover" /> : <BookOpen className="w-5 h-5 text-emerald-600/30" />}
+   313→   313→                            </div>
+   314→   314→                            <div className="min-w-0">
+   315→   315→                              <p className="font-medium truncate cursor-pointer hover:text-emerald-600 transition-colors" onClick={() => setContentManagerCourse(course)}>{course.title}</p>
+   316→   316→                              <p className="text-xs text-muted-foreground truncate">{course.description || 'No description'}</p>
+   317→   317→                            </div>
+   318→   318→                          </div>
+   319→   319→                        </td>
+   320→   320→                        <td className="px-4 py-3"><Badge variant="outline">{course.category || '—'}</Badge></td>
+   321→   321→                        <td className="px-4 py-3 font-semibold">₹{course.price}</td>
+   322→   322→                        <td className="px-4 py-3">
+   323→   323→                          {course.status === 'published'
+   324→   324→                            ? <Badge className="bg-emerald-600">Published</Badge>
+   325→   325→                            : <Badge variant="secondary">Inactive</Badge>}
+   326→   326→                        </td>
+   327→   327→                        <td className="px-4 py-3">
+   328→   328→                          <div className="flex items-center justify-end gap-1">
+   329→   329→                            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setContentManagerCourse(course)}>
+   330→   330→                              <Layers className="w-3.5 h-3.5 mr-1" /> Content
+   331→   331→                            </Button>
+   332→   332→                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openWizard(course)}>
+   333→   333→                              <Edit3 className="w-3.5 h-3.5" />
+   334→   334→                            </Button>
+   335→   335→                            {/* 3-dot row dropdown - Radix Portal, no clipping */}
+   336→   336→                            <DropdownMenu>
+   337→   337→                              <DropdownMenuTrigger asChild>
+   338→   338→                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+   339→   339→                                  <MoreVertical className="w-3.5 h-3.5" />
+   340→   340→                                </Button>
+   341→   341→                              </DropdownMenuTrigger>
+   342→   342→                              <DropdownMenuContent align="end" className="w-52">
+   343→   343→                                <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer">
+   344→   344→                                  <Layers className="w-3.5 h-3.5 mr-2" /> Course Overview
+   345→   345→                                </DropdownMenuItem>
+   346→   346→                                <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer">
+   347→   347→                                  <BookOpen className="w-3.5 h-3.5 mr-2" /> Add/View Content
+   348→   348→                                </DropdownMenuItem>
+   349→   349→                                <DropdownMenuItem onClick={() => togglePublish(course)} className="cursor-pointer">
+   350→   350→                                  {course.status === 'published' ? <EyeOff className="w-3.5 h-3.5 mr-2" /> : <Eye className="w-3.5 h-3.5 mr-2" />}
+   351→   351→                                  {course.status === 'published' ? 'Unpublish' : 'Publish'}
+   352→   352→                                </DropdownMenuItem>
+   353→   353→                                <DropdownMenuItem onClick={() => openWizard(course)} className="cursor-pointer">
+   354→   354→                                  <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit
+   355→   355→                                </DropdownMenuItem>
+   356→   356→                                <DropdownMenuItem onClick={() => toast.info('Duplicated (demo)')} className="cursor-pointer">
+   357→   357→                                  <Copy className="w-3.5 h-3.5 mr-2" /> Duplicate
+   358→   358→                                </DropdownMenuItem>
+   359→   359→                                <DropdownMenuItem onClick={() => toast.info('Link copied!')} className="cursor-pointer">
+   360→   360→                                  <Share2 className="w-3.5 h-3.5 mr-2" /> Share
+   361→   361→                                </DropdownMenuItem>
+   362→   362→                                <DropdownMenuSeparator />
+   363→   363→                                <DropdownMenuItem onClick={() => setCourseToDelete(course)} className="cursor-pointer text-destructive focus:text-destructive focus:bg-red-50">
+   364→   364→                                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
+   365→   365→                                </DropdownMenuItem>
+   366→   366→                              </DropdownMenuContent>
+   367→   367→                            </DropdownMenu>
+   368→   368→                          </div>
+   369→   369→                        </td>
+   370→   370→                      </tr>
+   371→   371→                    ))}
+   372→   372→                  </tbody>
+   373→   373→                </table>
+   374→   374→              </div>
+   375→   375→
+   376→   376→              {/* Mobile Card View (below md) */}
+   377→   377→              <div className="md:hidden space-y-3">
+   378→   378→                {courses.map((course, idx) => (
+   379→   379→                  <Card key={course.id} className="overflow-hidden">
+   380→   380→                    <CardContent className="p-4">
+   381→   381→                      <div className="flex items-start gap-3">
+   382→   382→                        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 flex items-center justify-center shrink-0 overflow-hidden">
+   383→   383→                          {course.thumbnail ? <img src={course.thumbnail} alt="" className="w-full h-full object-cover" /> : <BookOpen className="w-6 h-6 text-emerald-600/30" />}
+   384→   384→                        </div>
+   385→   385→                        <div className="flex-1 min-w-0">
+   386→   386→                          <div className="flex items-start justify-between gap-2">
+   387→   387→                            <p className="font-medium text-sm leading-tight cursor-pointer hover:text-emerald-600 transition-colors line-clamp-2" onClick={() => setContentManagerCourse(course)}>{course.title}</p>
+   388→   388→                            {/* 3-dot row dropdown for mobile - Radix Portal */}
+   389→   389→                            <DropdownMenu>
+   390→   390→                              <DropdownMenuTrigger asChild>
+   391→   391→                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 shrink-0">
+   392→   392→                                  <MoreVertical className="w-4 h-4" />
+   393→   393→                                </Button>
+   394→   394→                              </DropdownMenuTrigger>
+   395→   395→                              <DropdownMenuContent align="end" className="w-52">
+   396→   396→                                <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer">
+   397→   397→                                  <Layers className="w-3.5 h-3.5 mr-2" /> Course Overview
+   398→   398→                                </DropdownMenuItem>
+   399→   399→                                <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer">
+   400→   400→                                  <BookOpen className="w-3.5 h-3.5 mr-2" /> Add/View Content
+   401→   401→                                </DropdownMenuItem>
+   402→   402→                                <DropdownMenuItem onClick={() => togglePublish(course)} className="cursor-pointer">
+   403→   403→                                  {course.status === 'published' ? <EyeOff className="w-3.5 h-3.5 mr-2" /> : <Eye className="w-3.5 h-3.5 mr-2" />}
+   404→   404→                                  {course.status === 'published' ? 'Unpublish' : 'Publish'}
+   405→   405→                                </DropdownMenuItem>
+   406→   406→                                <DropdownMenuItem onClick={() => openWizard(course)} className="cursor-pointer">
+   407→   407→                                  <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit
+   408→   408→                                </DropdownMenuItem>
+   409→   409→                                <DropdownMenuItem onClick={() => toast.info('Duplicated (demo)')} className="cursor-pointer">
+   410→   410→                                  <Copy className="w-3.5 h-3.5 mr-2" /> Duplicate
+   411→   411→                                </DropdownMenuItem>
+   412→   412→                                <DropdownMenuItem onClick={() => toast.info('Link copied!')} className="cursor-pointer">
+   413→   413→                                  <Share2 className="w-3.5 h-3.5 mr-2" /> Share
+   414→   414→                                </DropdownMenuItem>
+   415→   415→                                <DropdownMenuSeparator />
+   416→   416→                                <DropdownMenuItem onClick={() => setCourseToDelete(course)} className="cursor-pointer text-destructive focus:text-destructive focus:bg-red-50">
+   417→   417→                                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
+   418→   418→                                </DropdownMenuItem>
+   419→   419→                              </DropdownMenuContent>
+   420→   420→                            </DropdownMenu>
+   421→   421→                          </div>
+   422→   422→                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{course.description || 'No description'}</p>
+   423→   423→                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+   424→   424→                            <Badge variant="outline" className="text-xs">{course.category || '—'}</Badge>
+   425→   425→                            <span className="text-sm font-semibold text-emerald-600">₹{course.price}</span>
+   426→   426→                            {course.status === 'published'
+   427→   427→                              ? <Badge className="bg-emerald-600 text-xs">Published</Badge>
+   428→   428→                              : <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+   429→   429→                          </div>
+   430→   430→                          <div className="flex items-center gap-2 mt-3">
+   431→   431→                            <Button size="sm" variant="outline" className="h-8 flex-1 gap-1 text-xs" onClick={() => setContentManagerCourse(course)}>
+   432→   432→                              <Layers className="w-3.5 h-3.5" /> Content
+   433→   433→                            </Button>
+   434→   434→                            <Button size="sm" variant="outline" className="h-8 px-3 text-xs" onClick={() => openWizard(course)}>
+   435→   435→                              <Edit3 className="w-3.5 h-3.5" />
+   436→   436→                            </Button>
+   437→   437→                          </div>
+   438→   438→                        </div>
+   439→   439→                      </div>
+   440→   440→                    </CardContent>
+   441→   441→                  </Card>
+   442→   442→                ))}
+   443→   443→              </div>
+   444→   444→            </>
+   445→   445→          )}
+   446→   446→
+   447→   447→          {/* Pagination */}
+   448→   448→          {total > 20 && (
+   449→   449→            <div className="flex items-center justify-center gap-2">
+   450→   450→              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+   451→   451→              <span className="text-sm">Page {page}</span>
+   452→   452→              <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
+   453→   453→            </div>
+   454→   454→          )}
+   455→   455→        </TabsContent>
+   456→   456→
+   457→   457→        {/* ── Live & Upcoming Tab ── */}
+   458→   458→        <TabsContent value="live">
+   459→   459→          <div className="rounded-lg border overflow-hidden">
+   460→   460→            {/* Desktop table */}
+   461→   461→            <table className="hidden md:table w-full text-sm">
+   462→   462→              <thead className="bg-muted/50 border-b">
+   463→   463→                <tr>
+   464→   464→                  <th className="text-left px-4 py-3 font-medium">Content ID</th>
+   465→   465→                  <th className="text-left px-4 py-3 font-medium">Title</th>
+   466→   466→                  <th className="text-left px-4 py-3 font-medium">Product</th>
+   467→   467→                  <th className="text-left px-4 py-3 font-medium">Live On</th>
+   468→   468→                  <th className="text-left px-4 py-3 font-medium">Go Live</th>
+   469→   469→                  <th className="text-right px-4 py-3 font-medium">Actions</th>
+   470→   470→                </tr>
+   471→   471→              </thead>
+   472→   472→              <tbody>
+   473→   473→                <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No live sessions yet</td></tr>
+   474→   474→              </tbody>
+   475→   475→            </table>
+   476→   476→            {/* Mobile empty state */}
+   477→   477→            <div className="md:hidden p-8 text-center text-sm text-muted-foreground">No live sessions yet</div>
+   478→   478→          </div>
+   479→   479→        </TabsContent>
+   480→   480→
+   481→   481→        {/* ── Content Tab ── */}
+   482→   482→        <TabsContent value="content">
+   483→   483→          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4">
+   484→   484→            <div className="relative flex-1 min-w-[180px] sm:max-w-md">
+   485→   485→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   486→   486→              <Input placeholder="Search content..." className="pl-9 h-9 sm:h-10" />
+   487→   487→            </div>
+   488→   488→            <Button variant="outline" size="sm" className="gap-1 h-9 sm:h-10"><Filter className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Filters</span></Button>
+   489→   489→          </div>
+   490→   490→          {/* Desktop table */}
+   491→   491→          <div className="hidden md:block rounded-lg border overflow-hidden">
+   492→   492→            <table className="w-full text-sm">
+   493→   493→              <thead className="bg-muted/50 border-b">
+   494→   494→                <tr>
+   495→   495→                  <th className="text-left px-4 py-3 font-medium">ID</th>
+   496→   496→                  <th className="text-left px-4 py-3 font-medium">Title</th>
+   497→   497→                  <th className="text-left px-4 py-3 font-medium">Product</th>
+   498→   498→                  <th className="text-left px-4 py-3 font-medium">Date</th>
+   499→   499→                  <th className="text-left px-4 py-3 font-medium">View</th>
+   500→   500→                  <th className="text-right px-4 py-3 font-medium">Actions</th>
+   501→   501→                </tr>
+   502→   502→              </thead>
+   503→   503→              <tbody>
+   504→   504→                {courses.filter(c => c.status === 'published').map((course, idx) => (
+   505→   505→                  <tr key={course.id} className="hover:bg-muted/30">
+   506→   506→                    <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
+   507→   507→                    <td className="px-4 py-3 font-medium">{course.title}</td>
+   508→   508→                    <td className="px-4 py-3"><Badge variant="outline" className="bg-green-50 text-green-700">Recorded</Badge></td>
+   509→   509→                    <td className="px-4 py-3 text-muted-foreground">{new Date(course.createdAt).toLocaleDateString()} at {new Date(course.createdAt).toLocaleTimeString()}</td>
+   510→   510→                    <td className="px-4 py-3"><Button size="sm" variant="outline" className="gap-1" onClick={() => setContentManagerCourse(course)}><Play className="w-3 h-3" /> View</Button></td>
+   511→   511→                    <td className="px-4 py-3 text-right">
+   512→   512→                      <DropdownMenu>
+   513→   513→                        <DropdownMenuTrigger asChild>
+   514→   514→                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0"><MoreVertical className="w-3.5 h-3.5" /></Button>
+   515→   515→                        </DropdownMenuTrigger>
+   516→   516→                        <DropdownMenuContent align="end" className="w-48">
+   517→   517→                          <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer"><Play className="w-3.5 h-3.5 mr-2" /> View</DropdownMenuItem>
+   518→   518→                          <DropdownMenuItem onClick={() => setContentManagerCourse(course)} className="cursor-pointer"><Layers className="w-3.5 h-3.5 mr-2" /> Manage Content</DropdownMenuItem>
+   519→   519→                        </DropdownMenuContent>
+   520→   520→                      </DropdownMenu>
+   521→   521→                    </td>
+   522→   522→                  </tr>
+   523→   523→                ))}
+   524→   524→                {courses.filter(c => c.status === 'published').length === 0 && (
+   525→   525→                  <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No content yet</td></tr>
+   526→   526→                )}
+   527→   527→              </tbody>
+   528→   528→            </table>
+   529→   529→          </div>
+   530→   530→          {/* Mobile card view */}
+   531→   531→          <div className="md:hidden space-y-3">
+   532→   532→            {courses.filter(c => c.status === 'published').map((course, idx) => (
+   533→   533→              <Card key={course.id}>
+   534→   534→                <CardContent className="p-4">
+   535→   535→                  <div className="flex items-start justify-between gap-2">
+   536→   536→                    <div className="min-w-0 flex-1">
+   537→   537→                      <p className="text-xs text-muted-foreground">#{idx + 1}</p>
+   538→   538→                      <p className="font-medium text-sm truncate">{course.title}</p>
+   539→   539→                      <Badge variant="outline" className="bg-green-50 text-green-700 text-xs mt-1">Recorded</Badge>
+   540→   540→                      <p className="text-xs text-muted-foreground mt-2">{new Date(course.createdAt).toLocaleDateString()}</p>
+   541→   541→                    </div>
+   542→   542→                    <Button size="sm" variant="outline" className="h-8 gap-1 text-xs shrink-0" onClick={() => setContentManagerCourse(course)}><Play className="w-3 h-3" /> View</Button>
+   543→   543→                  </div>
+   544→   544→                </CardContent>
+   545→   545→              </Card>
+   546→   546→            ))}
+   547→   547→            {courses.filter(c => c.status === 'published').length === 0 && (
+   548→   548→              <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">No content yet</CardContent></Card>
+   549→   549→            )}
+   550→   550→          </div>
+   551→   551→        </TabsContent>
+   552→   552→      </Tabs>
+   553→   553→
+   554→   554→      {/* ── Add Content Modal (for Bulk Actions) ── */}
+   555→   555→      <Dialog open={!!addModalType} onOpenChange={(open) => !open && setAddModalType(null)}>
+   556→   556→        <DialogContent className="max-w-lg">
+   557→   557→          <DialogHeader>
+   558→   558→            <DialogTitle>Add {addModalType}</DialogTitle>
+   559→   559→          </DialogHeader>
+   560→   560→          {addModalType && (
+   561→   561→            <div className="space-y-4 py-2">
+   562→   562→              {/* Content Target */}
+   563→   563→              <div className="space-y-2">
+   564→   564→                <Label>Content Target</Label>
+   565→   565→                <div className="flex gap-2">
+   566→   566→                  <button className="px-4 py-2 rounded-lg bg-muted text-sm font-medium">Courses</button>
+   567→   567→                  <button className="px-4 py-2 rounded-lg border text-sm">Global Folder</button>
+   568→   568→                </div>
+   569→   569→              </div>
+   570→   570→              {/* Select Course */}
+   571→   571→              <div className="space-y-2">
+   572→   572→                <Label>Select Course *</Label>
+   573→   573→                <Input placeholder="Search courses..." />
+   574→   574→              </div>
+   575→   575→              {/* Upload area */}
+   576→   576→              {(addModalType.includes('video') || addModalType.includes('folder') || addModalType.includes('test') || addModalType.includes('image') || addModalType.includes('pdf')) && (
+   577→   577→                <div className="space-y-2">
+   578→   578→                  <Label>Upload File</Label>
+   579→   579→                  <div className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-emerald-400 transition-colors">
+   580→   580→                    <Upload className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
+   581→   581→                    <p className="text-sm text-muted-foreground">Click or Drag & Drop your file here</p>
+   582→   582→                    <p className="text-xs text-muted-foreground mt-1">Recommended size: 960px × 540px</p>
+   583→   583→                  </div>
+   584→   584→                </div>
+   585→   585→              )}
+   586→   586→              {/* Title */}
+   587→   587→              <div className="space-y-2">
+   588→   588→                <Label>Title *</Label>
+   589→   589→                <Input placeholder="Enter title" />
+   590→   590→              </div>
+   591→   591→              {/* Status */}
+   592→   592→              <div className="space-y-2">
+   593→   593→                <Label>Status</Label>
+   594→   594→                <div className="flex gap-2">
+   595→   595→                  <button className="px-4 py-2 rounded-lg bg-muted text-sm font-medium">Free</button>
+   596→   596→                  <button className="px-4 py-2 rounded-lg border text-sm">Paid</button>
+   597→   597→                </div>
+   598→   598→              </div>
+   599→   599→            </div>
+   600→   600→          )}
+   601→   601→          <DialogFooter>
+   602→   602→            <Button variant="outline" onClick={() => setAddModalType(null)}>Cancel</Button>
+   603→   603→            <Button onClick={() => { toast.success(`${addModalType} added!`); setAddModalType(null) }} className="bg-emerald-600 hover:bg-emerald-700">Submit</Button>
+   604→   604→          </DialogFooter>
+   605→   605→        </DialogContent>
+   606→   606→      </Dialog>
+   607→   607→
+   608→   608→      {/* ── Multi-Step Course Wizard ── */}
+   609→   609→      {wizardOpen && (
+   610→   610→        <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+   611→   611→          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-background rounded-xl shadow-2xl w-full max-w-6xl my-2 sm:my-8 max-h-[98vh] sm:max-h-[95vh] overflow-y-auto">
+   612→   612→            <div className="sticky top-0 z-10 bg-background border-b px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+   613→   613→              <h2 className="text-base sm:text-xl font-bold truncate">{editingCourse ? 'Edit Course' : 'Add New Course'}</h2>
+   614→   614→              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+   615→   615→                <Button variant="outline" size="sm" onClick={() => handleSave(false)} disabled={saving} className="hidden sm:inline-flex"><Save className="w-4 h-4 mr-1" /> Save Draft</Button>
+   616→   616→                <Button size="sm" onClick={() => handleSave(true)} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Publish</span></>}</Button>
+   617→   617→                <Button variant="ghost" size="icon" onClick={() => setWizardOpen(false)}><X className="w-5 h-5" /></Button>
+   618→   618→              </div>
+   619→   619→            </div>
+   620→   620→            <div className="border-b px-3 sm:px-6 py-3 sm:py-4">
+   621→   621→              <div className="flex items-center justify-between max-w-2xl mx-auto">
+   622→   622→                {STEPS.map((step, idx) => (
+   623→   623→                  <React.Fragment key={step.id}>
+   624→   624→                    <button onClick={() => setCurrentStep(step.id)} className="flex flex-col items-center gap-1 shrink-0">
+   625→   625→                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all ${currentStep === step.id ? 'bg-emerald-600 text-white' : currentStep > step.id ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40' : 'bg-muted text-muted-foreground'}`}>
+   626→   626→                        {currentStep > step.id ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : <step.icon className="w-4 h-4 sm:w-5 sm:h-5" />}
+   627→   627→                      </div>
+   628→   628→                      <span className={`text-[10px] sm:text-xs font-medium ${currentStep === step.id ? 'text-emerald-600' : 'text-muted-foreground'}`}>{step.label}</span>
+   629→   629→                    </button>
+   630→   630→                    {idx < STEPS.length - 1 && <div className={`h-0.5 flex-1 mx-1 sm:mx-2 ${currentStep > step.id ? 'bg-emerald-600' : 'bg-muted'}`} />}
+   631→   631→                  </React.Fragment>
+   632→   632→                ))}
+   633→   633→              </div>
+   634→   634→            </div>
+   635→   635→            <div className="grid lg:grid-cols-3 gap-4 sm:gap-6 p-3 sm:p-6">
+   636→   636→              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+   637→   637→                <AnimatePresence mode="wait">
+   638→   638→                  {currentStep === 1 && (
+   639→   639→                    <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+   640→   640→                      <h3 className="text-base sm:text-lg font-semibold">Basic Course Information</h3>
+   641→   641→                      <div className="space-y-2"><Label>Title *</Label><Input placeholder="Enter course name" value={formData.title} onChange={(e) => update('title', e.target.value)} /></div>
+   642→   642→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+   643→   643→                        <div className="space-y-2"><Label>Price (₹) *</Label><Input type="number" placeholder="0" value={formData.price} onChange={(e) => update('price', e.target.value)} /><p className="text-xs text-muted-foreground">Final price student will pay</p></div>
+   644→   644→                        <div className="space-y-2"><Label>Category</Label><Input placeholder="e.g. Physics, JEE" value={formData.category} onChange={(e) => update('category', e.target.value)} /></div>
+   645→   645→                      </div>
+   646→   646→                      <div className="flex items-center justify-between p-3 rounded-lg border"><div><Label className="cursor-pointer">Featured Course</Label><p className="text-xs text-muted-foreground">Show on homepage</p></div><Switch checked={formData.featured} onCheckedChange={(v) => update('featured', v)} /></div>
+   647→   647→                      <div className="space-y-2"><Label>Course Description</Label><Textarea placeholder="Write a detailed description..." value={formData.description} onChange={(e) => update('description', e.target.value)} rows={6} /></div>
+   648→   648→                      <div className="space-y-2">
+   649→   649→                        <Label>Cover Image URL</Label>
+   650→   650→                        <div className="flex gap-2">
+   651→   651→                          <Input placeholder="https://..." value={formData.thumbnail} onChange={(e) => update('thumbnail', e.target.value)} />
+   652→   652→                          <Button variant="outline" size="icon" onClick={() => document.getElementById('thumb-upload')?.click()}><Upload className="w-4 h-4" /></Button>
+   653→   653→                          <input id="thumb-upload" type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f, 'thumbnail') }} />
+   654→   654→                        </div>
+   655→   655→                        {formData.thumbnail && <img src={formData.thumbnail} alt="" className="mt-2 rounded-lg border max-h-40 object-cover" />}
+   656→   656→                      </div>
+   657→   657→                      <div className="space-y-2">
+   658→   658→                        <Label>Demo Video URL</Label>
+   659→   659→                        <div className="flex gap-2">
+   660→   660→                          <Input placeholder="https://youtube.com/watch?v=..." value={formData.demoVideo} onChange={(e) => update('demoVideo', e.target.value)} />
+   661→   661→                          <Button variant="outline" size="icon" onClick={() => document.getElementById('video-upload')?.click()}><Video className="w-4 h-4" /></Button>
+   662→   662→                          <input id="video-upload" type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f, 'demoVideo') }} />
+   663→   663→                        </div>
+   664→   664→                      </div>
+   665→   665→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+   666→   666→                        <div className="space-y-2"><Label>Language</Label><Select value={formData.language} onValueChange={(v) => update('language', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Hindi">Hindi</SelectItem><SelectItem value="English">English</SelectItem><SelectItem value="Bilingual">Bilingual</SelectItem></SelectContent></Select></div>
+   667→   667→                        <div className="space-y-2"><Label>Level</Label><Select value={formData.level} onValueChange={(v) => update('level', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="All">All Levels</SelectItem><SelectItem value="Beginner">Beginner</SelectItem><SelectItem value="Intermediate">Intermediate</SelectItem><SelectItem value="Advanced">Advanced</SelectItem></SelectContent></Select></div>
+   668→   668→                      </div>
+   669→   669→                      <div className="space-y-2"><Label>Course Validity</Label><Select value={formData.validityType} onValueChange={(v) => update('validityType', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="lifetime">Lifetime Access</SelectItem><SelectItem value="months">Limited (Months)</SelectItem><SelectItem value="end_date">End Date</SelectItem></SelectContent></Select>
+   670→   670→                        {formData.validityType === 'months' && <Input type="number" placeholder="Months" value={formData.validityMonths} onChange={(e) => update('validityMonths', e.target.value)} />}
+   671→   671→                        {formData.validityType === 'end_date' && <Input type="date" value={formData.validityEndDate} onChange={(e) => update('validityEndDate', e.target.value)} />}
+   672→   672→                      </div>
+   673→   673→                    </motion.div>
+   674→   674→                  )}
+   675→   675→                  {currentStep === 2 && (
+   676→   676→                    <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+   677→   677→                      <h3 className="text-base sm:text-lg font-semibold">Pricing & Discounts</h3>
+   678→   678→                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+   679→   679→                        <div className="space-y-2"><Label>MRP (Original Price)</Label><Input type="number" placeholder="999" value={formData.mrp} onChange={(e) => update('mrp', e.target.value)} /></div>
+   680→   680→                        <div className="space-y-2"><Label>Selling Price</Label><Input type="number" placeholder="499" value={formData.price} onChange={(e) => update('price', e.target.value)} /></div>
+   681→   681→                      </div>
+   682→   682→                      {parseFloat(formData.mrp) > 0 && parseFloat(formData.price) > 0 && (
+   683→   683→                        <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+   684→   684→                          <div className="flex items-center justify-between">
+   685→   685→                            <div><p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Discount</p><p className="text-2xl font-bold text-emerald-600">{Math.round((1 - parseFloat(formData.price) / parseFloat(formData.mrp)) * 100)}% OFF</p></div>
+   686→   686→                            <div className="text-right"><p className="text-sm text-muted-foreground line-through">₹{formData.mrp}</p><p className="text-2xl font-bold">₹{formData.price}</p></div>
+   687→   687→                          </div>
+   688→   688→                        </div>
+   689→   689→                      )}
+   690→   690→                      <div className="space-y-2"><Label>Discount Codes</Label><Input placeholder="SUMMER20, FIRST50" value={formData.discountCode} onChange={(e) => update('discountCode', e.target.value)} /></div>
+   691→   691→                    </motion.div>
+   692→   692→                  )}
+   693→   693→                  {currentStep === 3 && (
+   694→   694→                    <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+   695→   695→                      <h3 className="text-base sm:text-lg font-semibold">Course Content</h3>
+   696→   696→                      <div className="space-y-2"><Label>Additional Content / Notes</Label><Textarea placeholder="Any additional content..." value={formData.content} onChange={(e) => update('content', e.target.value)} rows={5} /></div>
+   697→   697→                      <div className="p-4 rounded-lg border-2 border-dashed text-center">
+   698→   698→                        <Layers className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+   699→   699→                        <p className="text-sm font-medium">Course Modules & Lessons</p>
+   700→   700→                        <p className="text-xs text-muted-foreground mt-1">Save the course, then add modules from the Content Manager.</p>
+   701→   701→                        {editingCourse ? <Button variant="outline" size="sm" className="mt-3 gap-2" onClick={() => { setWizardOpen(false); setContentManagerCourse(editingCourse) }}><Plus className="w-3.5 h-3.5" /> Manage Modules</Button> : <Badge variant="secondary" className="mt-3 text-xs">Save course to enable</Badge>}
+   702→   702→                      </div>
+   703→   703→                    </motion.div>
+   704→   704→                  )}
+   705→   705→                  {currentStep === 4 && (
+   706→   706→                    <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+   707→   707→                      <h3 className="text-base sm:text-lg font-semibold">Additional Settings</h3>
+   708→   708→                      <div className="space-y-2"><Label>Sorting Order</Label><Input type="number" placeholder="0" value={formData.sortOrder} onChange={(e) => update('sortOrder', e.target.value)} /></div>
+   709→   709→                      <div className="space-y-2"><Label>Course Status</Label><Select value={formData.status} onValueChange={(v) => update('status', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="published">Published</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent></Select></div>
+   710→   710→                      <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border">
+   711→   711→                        <h4 className="font-medium mb-3">Review Details</h4>
+   712→   712→                        <div className="space-y-1 text-sm">
+   713→   713→                          <div className="flex justify-between"><span className="text-muted-foreground">Title:</span><span className="font-medium">{formData.title || 'Not set'}</span></div>
+   714→   714→                          <div className="flex justify-between"><span className="text-muted-foreground">Price:</span><span className="font-medium">₹{formData.price}</span></div>
+   715→   715→                          <div className="flex justify-between"><span className="text-muted-foreground">MRP:</span><span className="font-medium">₹{formData.mrp}</span></div>
+   716→   716→                          <div className="flex justify-between"><span className="text-muted-foreground">Category:</span><span className="font-medium">{formData.category || 'None'}</span></div>
+   717→   717→                          <div className="flex justify-between"><span className="text-muted-foreground">Status:</span><span className="font-medium">{formData.status}</span></div>
+   718→   718→                        </div>
+   719→   719→                      </div>
+   720→   720→                    </motion.div>
+   721→   721→                  )}
+   722→   722→                </AnimatePresence>
+   723→   723→                <div className="flex items-center justify-between pt-4 border-t">
+   724→   724→                  <Button variant="outline" onClick={() => setCurrentStep(s => Math.max(1, s - 1))} disabled={currentStep === 1}><ArrowLeft className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Back</span></Button>
+   725→   725→                  {currentStep < 4 ? <Button onClick={() => setCurrentStep(s => Math.min(4, s + 1))} className="bg-emerald-600 hover:bg-emerald-700"><span className="hidden sm:inline">Next</span> <ArrowRight className="w-4 h-4 ml-1" /></Button> : <Button onClick={() => handleSave(true)} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">{saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} <span className="hidden sm:inline">Publish Course</span><span className="sm:hidden">Publish</span></Button>}
+   726→   726→                </div>
+   727→   727→              </div>
+   728→   728→              {/* Live Preview */}
+   729→   729→              <div className="hidden lg:block">
+   730→   730→                <div className="sticky top-24">
+   731→   731→                  <p className="text-xs font-medium text-muted-foreground uppercase mb-3 flex items-center gap-1"><Eye className="w-3 h-3" /> Preview</p>
+   732→   732→                  <Card className="overflow-hidden">
+   733→   733→                    <div className="aspect-video bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950/40 dark:to-teal-950/40 relative">
+   734→   734→                      {formData.thumbnail ? <img src={formData.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-10 h-10 text-emerald-600/30" /></div>}
+   735→   735→                      {formData.featured && <Badge className="absolute top-2 left-2 bg-amber-500"><Star className="w-3 h-3 mr-1" /> Featured</Badge>}
+   736→   736→                    </div>
+   737→   737→                    <CardContent className="p-4 space-y-3">
+   738→   738→                      <h3 className="font-bold text-lg line-clamp-2">{formData.title || 'Course Title'}</h3>
+   739→   739→                      <p className="text-sm text-muted-foreground line-clamp-3">{formData.description || 'Course description...'}</p>
+   740→   740→                      <div className="flex flex-wrap gap-1">
+   741→   741→                        {formData.category && <Badge variant="outline" className="text-xs">{formData.category}</Badge>}
+   742→   742→                        <Badge variant="outline" className="text-xs">{formData.level}</Badge>
+   743→   743→                        <Badge variant="outline" className="text-xs">{formData.language}</Badge>
+   744→   744→                      </div>
+   745→   745→                      <div className="flex items-center gap-2 pt-2">
+   746→   746→                        <span className="text-2xl font-bold text-emerald-600">₹{formData.price || '0'}</span>
+   747→   747→                        {parseFloat(formData.mrp) > parseFloat(formData.price) && <><span className="text-sm text-muted-foreground line-through">₹{formData.mrp}</span><Badge className="bg-rose-500 text-xs">{Math.round((1 - parseFloat(formData.price) / parseFloat(formData.mrp)) * 100)}% OFF</Badge></>}
+   748→   748→                      </div>
+   749→   749→                      <Button className="w-full bg-emerald-600 hover:bg-emerald-700" disabled>Enroll Now</Button>
+   750→   750→                    </CardContent>
+   751→   751→                  </Card>
+   752→   752→                </div>
+   753→   753→              </div>
+   754→   754→            </div>
+   755→   755→          </motion.div>
+   756→   756→        </div>
+   757→   757→      )}
+   758→   758→
+   759→   759→      {/* Delete Confirmation */}
+   760→   760→      <AlertDialog open={!!courseToDelete} onOpenChange={(open) => !open && setCourseToDelete(null)}>
+   761→   761→        <AlertDialogContent>
+   762→   762→          <AlertDialogHeader><AlertDialogTitle>Delete this course?</AlertDialogTitle><AlertDialogDescription>This will permanently delete "{courseToDelete?.title}". This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+   763→   763→          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+   764→   764→        </AlertDialogContent>
+   765→   765→      </AlertDialog>
+   766→   766→    </div>
+   767→   767→  )
+   768→   768→}
+   769→   769→
+   770→   770→export default CoursesList
+   771→   771→

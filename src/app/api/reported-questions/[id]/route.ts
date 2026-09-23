@@ -1,0 +1,109 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { checkModuleAccess } from '@/lib/module-guard'
+import { getAuthUser } from '@/lib/auth-helpers'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const reportedQuestion = await db.reportedQuestion.findUnique({
+      where: { id },
+      include: {
+        question: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            testId: true,
+          },
+        },
+      },
+    })
+
+    if (!reportedQuestion) {
+      return NextResponse.json(
+        { error: 'Reported question not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ success: true, item: reportedQuestion })
+  } catch (error) {
+    console.error('Failed to fetch reported question:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch reported question' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const accessCheck = await checkModuleAccess(request, 'test-series')
+    if (!accessCheck.allowed) {
+      return NextResponse.json(
+        { success: false, message: accessCheck.error },
+        { status: accessCheck.status }
+      )
+    }
+
+    const authUser = await getAuthUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const body = await request.json()
+
+    const existing = await db.reportedQuestion.findUnique({
+      where: { id },
+      include: { question: { include: { test: true } } }
+    })
+    
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Reported question not found' },
+        { status: 404 }
+      )
+    }
+
+    // Security: Only allow updating reports for tests in the authenticated user's organization
+    if (existing.question.test.organizationId !== authUser.orgId) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      )
+    }
+
+    // Only status can be updated: pending/resolved/dismissed
+    if (!body.status || !['pending', 'resolved', 'dismissed'].includes(body.status)) {
+      return NextResponse.json(
+        { error: 'Status must be "pending", "resolved", or "dismissed"' },
+        { status: 400 }
+      )
+    }
+
+    const reportedQuestion = await db.reportedQuestion.update({
+      where: { id },
+      data: {
+        status: body.status,
+      },
+    })
+
+    return NextResponse.json({ success: true, item: reportedQuestion })
+  } catch (error) {
+    console.error('Failed to update reported question:', error)
+    return NextResponse.json(
+      { error: 'Failed to update reported question' },
+      { status: 500 }
+    )
+  }
+}
+
+// No DELETE - reports should never be deleted, only resolved/dismissed

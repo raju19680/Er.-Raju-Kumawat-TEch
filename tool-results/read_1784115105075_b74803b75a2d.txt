@@ -1,0 +1,602 @@
+   100→   100→
+   101→   101→function getLessonIcon(type: string) {
+   102→   102→  switch (type) {
+   103→   103→    case 'video': return Video
+   104→   104→    case 'text': return FileText
+   105→   105→    case 'pdf': return FileText
+   106→   106→    case 'quiz': return Monitor
+   107→   107→    case 'live': return Headphones
+   108→   108→    default: return Play
+   109→   109→  }
+   110→   110→}
+   111→   111→
+   112→   112→function getLessonTypeLabel(type: string) {
+   113→   113→  switch (type) {
+   114→   114→    case 'video': return 'Video'
+   115→   115→    case 'text': return 'Text'
+   116→   116→    case 'pdf': return 'PDF'
+   117→   117→    case 'quiz': return 'Quiz'
+   118→   118→    case 'live': return 'Live'
+   119→   119→    default: return 'Lesson'
+   120→   120→  }
+   121→   121→}
+   122→   122→
+   123→   123→function extractYouTubeId(url: string): string | null {
+   124→   124→  const patterns = [
+   125→   125→    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+   126→   126→    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+   127→   127→  ]
+   128→   128→  for (const p of patterns) {
+   129→   129→    const m = url.match(p)
+   130→   130→    if (m) return m[1]
+   131→   131→  }
+   132→   132→  return null
+   133→   133→}
+   134→   134→
+   135→   135→// ── Video Player Component ───────────────────────────────────────────────
+   136→   136→function VideoPlayer({ url, title }: { url: string; title: string }) {
+   137→   137→  const youtubeId = extractYouTubeId(url)
+   138→   138→
+   139→   139→  if (youtubeId) {
+   140→   140→    return (
+   141→   141→      <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg">
+   142→   142→        <iframe
+   143→   143→          src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1&playsinline=1`}
+   144→   144→          title={title}
+   145→   145→          className="absolute inset-0 w-full h-full"
+   146→   146→          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+   147→   147→          allowFullScreen
+   148→   148→        />
+   149→   149→      </div>
+   150→   150→    )
+   151→   151→  }
+   152→   152→
+   153→   153→  return (
+   154→   154→    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-lg">
+   155→   155→      <video
+   156→   156→        src={url}
+   157→   157→        controls
+   158→   158→        className="absolute inset-0 w-full h-full"
+   159→   159→        title={title}
+   160→   160→      >
+   161→   161→        Your browser does not support the video tag.
+   162→   162→      </video>
+   163→   163→    </div>
+   164→   164→  )
+   165→   165→}
+   166→   166→
+   167→   167→// ── Lesson Content Component ─────────────────────────────────────────────
+   168→   168→function LessonContent({ lesson, isPurchased, onMarkComplete, isCompleted }: {
+   169→   169→  lesson: Lesson
+   170→   170→  isPurchased: boolean
+   171→   171→  onMarkComplete: () => void
+   172→   172→  isCompleted: boolean
+   173→   173→}) {
+   174→   174→  if (!isPurchased && !lesson.isFree) {
+   175→   175→    return (
+   176→   176→      <div className="flex flex-col items-center justify-center py-20 text-center">
+   177→   177→        <div className="flex items-center justify-center w-20 h-20 rounded-full bg-amber-50 mb-4">
+   178→   178→          <Lock className="size-10 text-amber-500" />
+   179→   179→        </div>
+   180→   180→        <h2 className="text-lg font-semibold text-gray-900 mb-1">Premium Lesson</h2>
+   181→   181→        <p className="text-gray-500 text-sm">Purchase this course to unlock all lessons</p>
+   182→   182→      </div>
+   183→   183→    )
+   184→   184→  }
+   185→   185→
+   186→   186→  return (
+   187→   187→    <div className="space-y-6">
+   188→   188→      {/* Video Player */}
+   189→   189→      {lesson.type === 'video' && lesson.videoUrl && (
+   190→   190→        <VideoPlayer url={lesson.videoUrl} title={lesson.title} />
+   191→   191→      )}
+   192→   192→
+   193→   193→      {/* Text Content */}
+   194→   194→      {lesson.type === 'text' && lesson.content && (
+   195→   195→        <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-amber-600">
+   196→   196→          <div dangerouslySetInnerHTML={{ __html: lesson.content }} />
+   197→   197→        </div>
+   198→   198→      )}
+   199→   199→
+   200→   200→      {/* PDF Viewer */}
+   201→   201→      {lesson.type === 'pdf' && lesson.fileUrl && (
+   202→   202→        <div className="space-y-4">
+   203→   203→          <div className="relative w-full rounded-xl overflow-hidden border bg-gray-50" style={{ minHeight: 500 }}>
+   204→   204→            <iframe
+   205→   205→              src={lesson.fileUrl}
+   206→   206→              className="w-full border-0"
+   207→   207→              style={{ minHeight: 600 }}
+   208→   208→              title={lesson.title}
+   209→   209→            />
+   210→   210→          </div>
+   211→   211→          <Button variant="outline" className="gap-2" asChild>
+   212→   212→            <a href={lesson.fileUrl} target="_blank" rel="noopener noreferrer">
+   213→   213→              <Download className="size-4" />
+   214→   214→              Download PDF
+   215→   215→            </a>
+   216→   216→          </Button>
+   217→   217→        </div>
+   218→   218→      )}
+   219→   219→
+   220→   220→      {/* Quiz placeholder */}
+   221→   221→      {lesson.type === 'quiz' && (
+   222→   222→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   223→   223→          <Monitor className="size-12 text-amber-500 mb-4" />
+   224→   224→          <h3 className="text-lg font-semibold text-gray-900">Quiz Lesson</h3>
+   225→   225→          <p className="text-gray-500 text-sm mt-1">Interactive quiz will appear here</p>
+   226→   226→        </div>
+   227→   227→      )}
+   228→   228→
+   229→   229→      {/* Live placeholder */}
+   230→   230→      {lesson.type === 'live' && (
+   231→   231→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   232→   232→          <Headphones className="size-12 text-red-500 mb-4" />
+   233→   233→          <h3 className="text-lg font-semibold text-gray-900">Live Session</h3>
+   234→   234→          <p className="text-gray-500 text-sm mt-1">Join the live session at the scheduled time</p>
+   235→   235→        </div>
+   236→   236→      )}
+   237→   237→
+   238→   238→      {/* Notes */}
+   239→   239→      {lesson.notes && (
+   240→   240→        <Card className="border-amber-200 bg-amber-50/50">
+   241→   241→          <CardContent className="p-4">
+   242→   242→            <div className="flex items-center gap-2 mb-2">
+   243→   243→              <FileText className="size-4 text-amber-600" />
+   244→   244→              <span className="text-sm font-semibold text-amber-800">Lesson Notes</span>
+   245→   245→            </div>
+   246→   246→            <p className="text-sm text-amber-900 whitespace-pre-wrap">{lesson.notes}</p>
+   247→   247→          </CardContent>
+   248→   248→        </Card>
+   249→   249→      )}
+   250→   250→
+   251→   251→      {/* Content fallback for video lessons with text content */}
+   252→   252→      {lesson.type === 'video' && lesson.content && (
+   253→   253→        <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-amber-600">
+   254→   254→          <div dangerouslySetInnerHTML={{ __html: lesson.content }} />
+   255→   255→        </div>
+   256→   256→      )}
+   257→   257→
+   258→   258→      {/* No content placeholder */}
+   259→   259→      {!lesson.videoUrl && !lesson.content && !lesson.fileUrl && (
+   260→   260→        <div className="text-center py-12 text-gray-400">
+   261→   261→          <BookOpen className="size-10 mx-auto mb-3 opacity-40" />
+   262→   262→          <p className="text-sm">Lesson content will be available soon.</p>
+   263→   263→        </div>
+   264→   264→      )}
+   265→   265→
+   266→   266→      {/* Mark Complete Button */}
+   267→   267→      {isPurchased && (
+   268→   268→        <div className="flex items-center justify-between pt-4 border-t">
+   269→   269→          <div className="flex items-center gap-2">
+   270→   270→            {isCompleted ? (
+   271→   271→              <>
+   272→   272→                <CheckCircle2 className="size-5 text-emerald-600" />
+   273→   273→                <span className="text-sm font-medium text-emerald-700">Completed</span>
+   274→   274→              </>
+   275→   275→            ) : (
+   276→   276→              <>
+   277→   277→                <div className="size-5 rounded-full border-2 border-gray-300" />
+   278→   278→                <span className="text-sm text-gray-500">Mark as complete</span>
+   279→   279→              </>
+   280→   280→            )}
+   281→   281→          </div>
+   282→   282→          {!isCompleted && (
+   283→   283→            <Button
+   284→   284→              size="sm"
+   285→   285→              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+   286→   286→              onClick={onMarkComplete}
+   287→   287→            >
+   288→   288→              <CheckCircle2 className="size-4" />
+   289→   289→              Complete
+   290→   290→            </Button>
+   291→   291→          )}
+   292→   292→        </div>
+   293→   293→      )}
+   294→   294→    </div>
+   295→   295→  )
+   296→   296→}
+   297→   297→
+   298→   298→// ═══════════════════════════════════════════════════════════════════════════
+   299→   299→// MAIN COURSE DETAIL / PLAYER COMPONENT
+   300→   300→// ═══════════════════════════════════════════════════════════════════════════
+   301→   301→export default function CourseDetail() {
+   302→   302→  const { selectedCourseId, setStudentPage } = useAppStore()
+   303→   303→  const [course, setCourse] = useState<CourseData | null>(null)
+   304→   304→  const [purchase, setPurchase] = useState<{ id: string; purchasedAt: string; expiresAt: string | null } | null>(null)
+   305→   305→  const [progress, setProgress] = useState<Record<string, ProgressEntry>>({})
+   306→   306→  const [stats, setStats] = useState<CourseStats>({ totalLessons: 0, completedLessons: 0, totalDuration: 0, progressPercent: 0 })
+   307→   307→  const [loading, setLoading] = useState(true)
+   308→   308→  const [error, setError] = useState<string | null>(null)
+   309→   309→
+   310→   310→  // Active lesson
+   311→   311→  const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
+   312→   312→  const [activeModuleId, setActiveModuleId] = useState<string | null>(null)
+   313→   313→
+   314→   314→  // Sidebar state for mobile
+   315→   315→  const [sidebarOpen, setSidebarOpen] = useState(false)
+   316→   316→
+   317→   317→  // Expanded modules
+   318→   318→  const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({})
+   319→   319→
+   320→   320→  // Marking complete
+   321→   321→  const [markingComplete, setMarkingComplete] = useState(false)
+   322→   322→
+   323→   323→  // Load course data
+   324→   324→  const load = useCallback(async () => {
+   325→   325→    if (!selectedCourseId) return
+   326→   326→    setLoading(true)
+   327→   327→    setError(null)
+   328→   328→    try {
+   329→   329→      const res = await apiFetchJSON<{
+   330→   330→        success: boolean
+   331→   331→        course: CourseData
+   332→   332→        purchase: { id: string; purchasedAt: string; expiresAt: string | null }
+   333→   333→        progress: Record<string, ProgressEntry>
+   334→   334→        stats: CourseStats
+   335→   335→      }>(`/api/student/courses/${selectedCourseId}`)
+   336→   336→      if (res.success) {
+   337→   337→        setCourse(res.course)
+   338→   338→        setPurchase(res.purchase)
+   339→   339→        setProgress(res.progress || {})
+   340→   340→        setStats(res.stats || { totalLessons: 0, completedLessons: 0, totalDuration: 0, progressPercent: 0 })
+   341→   341→
+   342→   342→        // Auto-select first lesson
+   343→   343→        if (res.course.modules.length > 0 && res.course.modules[0].lessons.length > 0) {
+   344→   344→          // Find first incomplete lesson, or first lesson
+   345→   345→          let firstIncomplete: Lesson | null = null
+   346→   346→          for (const mod of res.course.modules) {
+   347→   347→            for (const lsn of mod.lessons) {
+   348→   348→              if (res.progress[lsn.id]?.status !== 'completed') {
+   349→   349→                firstIncomplete = lsn
+   350→   350→                break
+   351→   351→              }
+   352→   352→            }
+   353→   353→            if (firstIncomplete) break
+   354→   354→          }
+   355→   355→          const targetLesson = firstIncomplete || res.course.modules[0].lessons[0]
+   356→   356→          setActiveLessonId(targetLesson.id)
+   357→   357→          setActiveModuleId(res.course.modules[0].id)
+   358→   358→          // Expand all modules that have lessons
+   359→   359→          const expanded: Record<string, boolean> = {}
+   360→   360→          res.course.modules.forEach(m => { expanded[m.id] = true })
+   361→   361→          setExpandedModules(expanded)
+   362→   362→        }
+   363→   363→      }
+   364→   364→    } catch (err) {
+   365→   365→      console.error('Course detail error:', err)
+   366→   366→      setError('Failed to load course details. Please try again.')
+   367→   367→    } finally {
+   368→   368→      setLoading(false)
+   369→   369→    }
+   370→   370→  }, [selectedCourseId])
+   371→   371→
+   372→   372→  useEffect(() => { load() }, [load])
+   373→   373→
+   374→   374→  // Find active lesson object
+   375→   375→  const activeLesson = course?.modules
+   376→   376→    .flatMap(m => m.lessons)
+   377→   377→    .find(l => l.id === activeLessonId) || null
+   378→   378→
+   379→   379→  const activeModule = course?.modules.find(m => m.id === activeModuleId) || null
+   380→   380→
+   381→   381→  // Mark lesson complete
+   382→   382→  const handleMarkComplete = async () => {
+   383→   383→    if (!activeLessonId || !selectedCourseId || markingComplete) return
+   384→   384→    setMarkingComplete(true)
+   385→   385→    try {
+   386→   386→      const res = await apiFetch('/api/student/lesson-progress', {
+   387→   387→        method: 'POST',
+   388→   388→        headers: { 'Content-Type': 'application/json' },
+   389→   389→        body: JSON.stringify({
+   390→   390→          lessonId: activeLessonId,
+   391→   391→          courseId: selectedCourseId,
+   392→   392→          status: 'completed',
+   393→   393→        }),
+   394→   394→      })
+   395→   395→      if (res.ok) {
+   396→   396→        const data = await res.json()
+   397→   397→        if (data.success) {
+   398→   398→          setProgress(prev => ({
+   399→   399→            ...prev,
+   400→   400→            [activeLessonId]: { status: 'completed', completedAt: new Date().toISOString() },
+   401→   401→          }))
+   402→   402→          if (data.courseStats) {
+   403→   403→            setStats(prev => ({
+   404→   404→              ...prev,
+   405→   405→              completedLessons: data.courseStats.completedLessons,
+   406→   406→              progressPercent: data.courseStats.progressPercent,
+   407→   407→            }))
+   408→   408→          }
+   409→   409→          toast.success('Lesson completed! 🎉')
+   410→   410→        }
+   411→   411→      }
+   412→   412→    } catch {
+   413→   413→      toast.error('Failed to update progress')
+   414→   414→    } finally {
+   415→   415→      setMarkingComplete(false)
+   416→   416→    }
+   417→   417→  }
+   418→   418→
+   419→   419→  // Navigate to next lesson
+   420→   420→  const handleNextLesson = () => {
+   421→   421→    if (!course) return
+   422→   422→    const allLessons = course.modules.flatMap(m => m.lessons)
+   423→   423→    const currentIndex = allLessons.findIndex(l => l.id === activeLessonId)
+   424→   424→    if (currentIndex < allLessons.length - 1) {
+   425→   425→      const next = allLessons[currentIndex + 1]
+   426→   426→      setActiveLessonId(next.id)
+   427→   427→      // Find which module this lesson belongs to
+   428→   428→      for (const mod of course.modules) {
+   429→   429→        if (mod.lessons.some(l => l.id === next.id)) {
+   430→   430→          setActiveModuleId(mod.id)
+   431→   431→          setExpandedModules(prev => ({ ...prev, [mod.id]: true }))
+   432→   432→          break
+   433→   433→        }
+   434→   434→      }
+   435→   435→    }
+   436→   436→  }
+   437→   437→
+   438→   438→  // Navigate to previous lesson
+   439→   439→  const handlePrevLesson = () => {
+   440→   440→    if (!course) return
+   441→   441→    const allLessons = course.modules.flatMap(m => m.lessons)
+   442→   442→    const currentIndex = allLessons.findIndex(l => l.id === activeLessonId)
+   443→   443→    if (currentIndex > 0) {
+   444→   444→      const prev = allLessons[currentIndex - 1]
+   445→   445→      setActiveLessonId(prev.id)
+   446→   446→      for (const mod of course.modules) {
+   447→   447→        if (mod.lessons.some(l => l.id === prev.id)) {
+   448→   448→          setActiveModuleId(mod.id)
+   449→   449→          setExpandedModules(prev2 => ({ ...prev2, [mod.id]: true }))
+   450→   450→          break
+   451→   451→        }
+   452→   452→      }
+   453→   453→    }
+   454→   454→  }
+   455→   455→
+   456→   456→  // Toggle module expansion
+   457→   457→  const toggleModule = (moduleId: string) => {
+   458→   458→    setExpandedModules(prev => ({ ...prev, [moduleId]: !prev[moduleId] }))
+   459→   459→  }
+   460→   460→
+   461→   461→  // ── Loading State ──
+   462→   462→  if (loading) {
+   463→   463→    return (
+   464→   464→      <div className="space-y-6">
+   465→   465→        <div className="flex items-center gap-3">
+   466→   466→          <Skeleton className="size-9 rounded-md" />
+   467→   467→          <div>
+   468→   468→            <Skeleton className="h-6 w-48 mb-1" />
+   469→   469→            <Skeleton className="h-4 w-32" />
+   470→   470→          </div>
+   471→   471→        </div>
+   472→   472→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   473→   473→          <div className="lg:col-span-2">
+   474→   474→            <Skeleton className="aspect-video w-full rounded-xl" />
+   475→   475→            <Skeleton className="h-4 w-3/4 mt-4" />
+   476→   476→            <Skeleton className="h-4 w-1/2 mt-2" />
+   477→   477→          </div>
+   478→   478→          <Skeleton className="h-96 rounded-xl" />
+   479→   479→        </div>
+   480→   480→      </div>
+   481→   481→    )
+   482→   482→  }
+   483→   483→
+   484→   484→  // ── Error State ──
+   485→   485→  if (error) {
+   486→   486→    return (
+   487→   487→      <div className="space-y-6">
+   488→   488→        <div className="flex items-center gap-3">
+   489→   489→          <Button variant="ghost" size="icon" onClick={() => setStudentPage('my-courses')} className="shrink-0">
+   490→   490→            <ArrowLeft className="size-5" />
+   491→   491→          </Button>
+   492→   492→        </div>
+   493→   493→        <div className="flex flex-col items-center justify-center py-16 text-center">
+   494→   494→          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-red-50 mb-4">
+   495→   495→            <AlertCircle className="size-8 text-red-500" />
+   496→   496→          </div>
+   497→   497→          <h2 className="text-lg font-semibold text-gray-900 mb-1">Failed to Load</h2>
+   498→   498→          <p className="text-gray-500 text-sm mb-4">{error}</p>
+   499→   499→          <Button variant="outline" className="gap-2" onClick={load}>
+   500→   500→            <RotateCcw className="size-4" /> Try Again
+   501→   501→          </Button>
+   502→   502→        </div>
+   503→   503→      </div>
+   504→   504→    )
+   505→   505→  }
+   506→   506→
+   507→   507→  if (!course) {
+   508→   508→    return (
+   509→   509→      <div className="text-center py-16 text-gray-400">
+   510→   510→        <p className="text-base font-medium">Course not found</p>
+   511→   511→        <Button variant="outline" className="mt-3" onClick={() => setStudentPage('my-courses')}>
+   512→   512→          Go Back
+   513→   513→        </Button>
+   514→   514→      </div>
+   515→   515→    )
+   516→   516→  }
+   517→   517→
+   518→   518→  const isPurchased = !!purchase
+   519→   519→  const allLessons = course.modules.flatMap(m => m.lessons)
+   520→   520→  const currentIndex = allLessons.findIndex(l => l.id === activeLessonId)
+   521→   521→  const hasNext = currentIndex < allLessons.length - 1
+   522→   522→  const hasPrev = currentIndex > 0
+   523→   523→
+   524→   524→  // ── Sidebar: Module & Lesson List ──
+   525→   525→  const SidebarContent = () => (
+   526→   526→    <div className="space-y-1">
+   527→   527→      {/* Course Progress */}
+   528→   528→      <div className="p-4 border-b bg-gradient-to-r from-amber-50 to-white">
+   529→   529→        <div className="flex items-center justify-between mb-2">
+   530→   530→          <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Progress</span>
+   531→   531→          <span className="text-sm font-bold text-amber-700">{stats.progressPercent}%</span>
+   532→   532→        </div>
+   533→   533→        <Progress value={stats.progressPercent} className="h-2" />
+   534→   534→        <p className="text-xs text-gray-500 mt-1.5">
+   535→   535→          {stats.completedLessons} of {stats.totalLessons} lessons completed
+   536→   536→        </p>
+   537→   537→      </div>
+   538→   538→
+   539→   539→      {/* Modules */}
+   540→   540→      <ScrollArea className="h-[calc(100vh-280px)]">
+   541→   541→        <div className="p-2">
+   542→   542→          {course.modules.map((mod) => {
+   543→   543→            const isExpanded = expandedModules[mod.id]
+   544→   544→            const moduleLessons = mod.lessons
+   545→   545→            const completedInModule = moduleLessons.filter(l => progress[l.id]?.status === 'completed').length
+   546→   546→
+   547→   547→            return (
+   548→   548→              <div key={mod.id} className="mb-1">
+   549→   549→                {/* Module Header */}
+   550→   550→                <button
+   551→   551→                  onClick={() => toggleModule(mod.id)}
+   552→   552→                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left hover:bg-gray-50 transition-colors group"
+   553→   553→                >
+   554→   554→                  {isExpanded ? (
+   555→   555→                    <ChevronDown className="size-4 text-gray-400 shrink-0" />
+   556→   556→                  ) : (
+   557→   557→                    <ChevronRight className="size-4 text-gray-400 shrink-0" />
+   558→   558→                  )}
+   559→   559→                  <div className="flex-1 min-w-0">
+   560→   560→                    <p className="text-sm font-medium text-gray-900 truncate">{mod.title}</p>
+   561→   561→                    <p className="text-[11px] text-gray-400 mt-0.5">
+   562→   562→                      {completedInModule}/{moduleLessons.length} lessons
+   563→   563→                      {mod.description && ` · ${mod.description.slice(0, 40)}`}
+   564→   564→                    </p>
+   565→   565→                  </div>
+   566→   566→                </button>
+   567→   567→
+   568→   568→                {/* Lessons */}
+   569→   569→                <AnimatePresence initial={false}>
+   570→   570→                  {isExpanded && (
+   571→   571→                    <motion.div
+   572→   572→                      initial={{ height: 0, opacity: 0 }}
+   573→   573→                      animate={{ height: 'auto', opacity: 1 }}
+   574→   574→                      exit={{ height: 0, opacity: 0 }}
+   575→   575→                      transition={{ duration: 0.2 }}
+   576→   576→                      className="overflow-hidden"
+   577→   577→                    >
+   578→   578→                      <div className="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
+   579→   579→                        {moduleLessons.map((lesson) => {
+   580→   580→                          const Icon = getLessonIcon(lesson.type)
+   581→   581→                          const isActive = lesson.id === activeLessonId
+   582→   582→                          const isCompleted = progress[lesson.id]?.status === 'completed'
+   583→   583→                          const isLocked = !isPurchased && !lesson.isFree
+   584→   584→
+   585→   585→                          return (
+   586→   586→                            <button
+   587→   587→                              key={lesson.id}
+   588→   588→                              onClick={() => {
+   589→   589→                                if (isLocked) return
+   590→   590→                                setActiveLessonId(lesson.id)
+   591→   591→                                setActiveModuleId(mod.id)
+   592→   592→                                setSidebarOpen(false)
+   593→   593→                              }}
+   594→   594→                              className={cn(
+   595→   595→                                'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm transition-all',
+   596→   596→                                isActive
+   597→   597→                                  ? 'bg-amber-50 text-amber-900 font-medium'
+   598→   598→                                  : isCompleted
+   599→   599→                                    ? 'text-emerald-700 hover:bg-emerald-50/50'
+   600→   600→                                    : isLocked
+   601→   601→                                      ? 'text-gray-300 cursor-not-allowed'
+   602→   602→                                      : 'text-gray-600 hover:bg-gray-50',
+   603→   603→                              )}
+   604→   604→                              disabled={isLocked}
+   605→   605→                            >
+   606→   606→                              {isCompleted ? (
+   607→   607→                                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+   608→   608→                              ) : isLocked ? (
+   609→   609→                                <Lock className="size-3.5 text-gray-300 shrink-0" />
+   610→   610→                              ) : isActive ? (
+   611→   611→                                <Play className="size-4 text-amber-600 shrink-0 fill-amber-600" />
+   612→   612→                              ) : (
+   613→   613→                                <Icon className="size-4 text-gray-400 shrink-0" />
+   614→   614→                              )}
+   615→   615→                              <span className="flex-1 truncate">{lesson.title}</span>
+   616→   616→                              <span className="text-[10px] text-gray-400 shrink-0">
+   617→   617→                                {lesson.type === 'video' && lesson.videoDuration
+   618→   618→                                  ? formatDuration(lesson.videoDuration)
+   619→   619→                                  : getLessonTypeLabel(lesson.type)}
+   620→   620→                              </span>
+   621→   621→                              {lesson.isFree && !isPurchased && (
+   622→   622→                                <Badge className="text-[9px] px-1 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">FREE</Badge>
+   623→   623→                              )}
+   624→   624→                            </button>
+   625→   625→                          )
+   626→   626→                        })}
+   627→   627→                      </div>
+   628→   628→                    </motion.div>
+   629→   629→                  )}
+   630→   630→                </AnimatePresence>
+   631→   631→              </div>
+   632→   632→            )
+   633→   633→          })}
+   634→   634→        </div>
+   635→   635→      </ScrollArea>
+   636→   636→    </div>
+   637→   637→  )
+   638→   638→
+   639→   639→  // ── Main Render ──
+   640→   640→  return (
+   641→   641→    <div className="space-y-4">
+   642→   642→      {/* Header */}
+   643→   643→      <div className="flex items-center gap-3">
+   644→   644→        <Button variant="ghost" size="icon" onClick={() => setStudentPage('my-courses')} className="shrink-0">
+   645→   645→          <ArrowLeft className="size-5" />
+   646→   646→        </Button>
+   647→   647→        <div className="min-w-0 flex-1">
+   648→   648→          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{course.title}</h1>
+   649→   649→          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+   650→   650→            {course.category && <Badge variant="secondary">{course.category}</Badge>}
+   651→   651→            {course.level && course.level !== 'All' && <Badge variant="outline">{course.level}</Badge>}
+   652→   652→            {course.language && <Badge variant="outline">{course.language}</Badge>}
+   653→   653→            <span className="flex items-center gap-1">
+   654→   654→              <BookOpen className="size-3" />
+   655→   655→              {stats.totalLessons} lessons
+   656→   656→            </span>
+   657→   657→            {stats.totalDuration > 0 && (
+   658→   658→              <span className="flex items-center gap-1">
+   659→   659→                <Clock className="size-3" />
+   660→   660→                {formatDuration(stats.totalDuration)}
+   661→   661→              </span>
+   662→   662→            )}
+   663→   663→            {/* Validity info */}
+   664→   664→            {course.validityType === 'lifetime' && (
+   665→   665→              <span className="flex items-center gap-1 text-emerald-600">
+   666→   666→                <Sparkles className="size-3" /> Lifetime Access
+   667→   667→              </span>
+   668→   668→            )}
+   669→   669→            {course.validityType === 'months' && course.validityMonths && (
+   670→   670→              <span className="flex items-center gap-1">
+   671→   671→                <Clock className="size-3" /> {course.validityMonths} Months Access
+   672→   672→              </span>
+   673→   673→            )}
+   674→   674→            {course.validityType === 'end_date' && course.validityEndDate && (
+   675→   675→              <span className="flex items-center gap-1">
+   676→   676→                <Clock className="size-3" /> Valid till {new Date(course.validityEndDate).toLocaleDateString()}
+   677→   677→              </span>
+   678→   678→            )}
+   679→   679→          </div>
+   680→   680→        </div>
+   681→   681→        {/* Mobile sidebar toggle */}
+   682→   682→        <Button
+   683→   683→          variant="outline"
+   684→   684→          size="icon"
+   685→   685→          className="lg:hidden shrink-0"
+   686→   686→          onClick={() => setSidebarOpen(true)}
+   687→   687→        >
+   688→   688→          <Menu className="size-5" />
+   689→   689→        </Button>
+   690→   690→      </div>
+   691→   691→
+   692→   692→      {/* Mobile Progress Bar */}
+   693→   693→      <div className="lg:hidden">
+   694→   694→        <div className="flex items-center justify-between mb-1">
+   695→   695→          <span className="text-xs font-medium text-gray-600">{stats.completedLessons}/{stats.totalLessons} completed</span>
+   696→   696→          <span className="text-xs font-bold text-amber-700">{stats.progressPercent}%</span>
+   697→   697→        </div>
+   698→   698→        <Progress value={stats.progressPercent} className="h-1.5" />
+   699→   699→      </div>
+
+[showing lines 100-699 of 842; use offset=700 with limit to continue reading]

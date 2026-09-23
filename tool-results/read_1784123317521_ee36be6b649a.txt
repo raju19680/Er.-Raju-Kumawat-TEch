@@ -1,0 +1,664 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback } from 'react'
+     4→     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→     5→import {
+     6→     6→  ArrowLeft, Plus, Video, FileText, File, Link2, Edit3, Trash2,
+     7→     7→  ChevronDown, ChevronRight, GripVertical, Clock, Eye, EyeOff, Loader2,
+     8→     8→  Layers, Play, BookOpen, ClipboardList, Upload, Image as ImageIcon,
+     9→     9→  Music, Monitor, FileCode, ExternalLink, Save, X, MoreVertical,
+    10→    10→  Copy, RefreshCw, Share2, Lock, Unlock, Folder, FolderPlus, Radio,
+    11→    11→  Grid3x3, List, Search, Settings, MessageSquare, FileEdit, Award, Calendar
+    12→    12→} from 'lucide-react'
+    13→    13→import { apiFetch } from '@/lib/api-client'
+    14→    14→import { Button } from '@/components/ui/button'
+    15→    15→import { Input } from '@/components/ui/input'
+    16→    16→import { Label } from '@/components/ui/label'
+    17→    17→import { Badge } from '@/components/ui/badge'
+    18→    18→import { Card, CardContent } from '@/components/ui/card'
+    19→    19→import { Textarea } from '@/components/ui/textarea'
+    20→    20→import { Switch } from '@/components/ui/switch'
+    21→    21→import {
+    22→    22→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+    23→    23→} from '@/components/ui/dialog'
+    24→    24→import {
+    25→    25→  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+    26→    26→  DropdownMenuSeparator, DropdownMenuTrigger,
+    27→    27→} from '@/components/ui/dropdown-menu'
+    28→    28→import {
+    29→    29→  Tabs, TabsContent, TabsList, TabsTrigger
+    30→    30→} from '@/components/ui/tabs'
+    31→    31→import { toast } from 'sonner'
+    32→    32→
+    33→    33→// ── Types ─────────────────────────────────────────────────────────────────────
+    34→    34→interface Lesson {
+    35→    35→  id: string
+    36→    36→  title: string
+    37→    37→  type: string
+    38→    38→  content: string | null
+    39→    39→  videoUrl: string | null
+    40→    40→  videoDuration: number
+    41→    41→  fileUrl: string | null
+    42→    42→  notes: string | null
+    43→    43→  isFree: boolean
+    44→    44→  sortOrder: number
+    45→    45→  createdAt: string
+    46→    46→}
+    47→    47→
+    48→    48→interface Module {
+    49→    49→  id: string
+    50→    50→  title: string
+    51→    51→  description: string | null
+    52→    52→  sortOrder: number
+    53→    53→  lessons: Lesson[]
+    54→    54→}
+    55→    55→
+    56→    56→interface CourseInfo {
+    57→    57→  id: string
+    58→    58→  title: string
+    59→    59→  description: string | null
+    60→    60→  thumbnail: string | null
+    61→    61→  price: number
+    62→    62→  mrp: number
+    63→    63→  status: string
+    64→    64→  category: string | null
+    65→    65→  level: string
+    66→    66→}
+    67→    67→
+    68→    68→interface CourseContentManagerProps {
+    69→    69→  courseId: string
+    70→    70→  courseTitle: string
+    71→    71→  onBack: () => void
+    72→    72→}
+    73→    73→
+    74→    74→// ── Content Types (for right sidebar) ─────────────────────────────────────────
+    75→    75→const ADD_CONTENT_TYPES = [
+    76→    76→  { type: 'folder', label: 'Folder', icon: FolderPlus, color: 'text-blue-500' },
+    77→    77→  { type: 'video', label: 'Video', icon: Video, color: 'text-red-500' },
+    78→    78→  { type: 'pdf', label: 'PDF', icon: File, color: 'text-orange-500' },
+    79→    79→  { type: 'live', label: 'Live Stream', icon: Radio, color: 'text-purple-500' },
+    80→    80→  { type: 'youtube', label: 'YouTube/Zoom', icon: Monitor, color: 'text-red-600' },
+    81→    81→  { type: 'webinar', label: 'Webinar Live', icon: Radio, color: 'text-pink-500' },
+    82→    82→  { type: 'test', label: 'Test', icon: ClipboardList, color: 'text-amber-500' },
+    83→    83→  { type: 'subjective', label: 'Subjective Test', icon: FileEdit, color: 'text-indigo-500' },
+    84→    84→  { type: 'omr', label: 'OMR Test', icon: FileText, color: 'text-teal-500' },
+    85→    85→  { type: 'quiz', label: 'Quiz', icon: Award, color: 'text-yellow-500' },
+    86→    86→  { type: 'audio', label: 'Audio File', icon: Music, color: 'text-indigo-500' },
+    87→    87→  { type: 'image', label: 'Image', icon: ImageIcon, color: 'text-pink-500' },
+    88→    88→  { type: 'link', label: 'Link', icon: Link2, color: 'text-green-500' },
+    89→    89→  { type: 'document', label: 'Document', icon: FileText, color: 'text-blue-500' },
+    90→    90→  { type: 'code', label: 'Coding Problem', icon: FileCode, color: 'text-teal-500' },
+    91→    91→]
+    92→    92→
+    93→    93→// ── Content type display for list items ───────────────────────────────────────
+    94→    94→const TYPE_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; bg: string }> = {
+    95→    95→  video: { label: 'Video', icon: Video, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30' },
+    96→    96→  pdf: { label: 'PDF', icon: File, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+    97→    97→  text: { label: 'Article', icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+    98→    98→  link: { label: 'Link', icon: Link2, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-950/30' },
+    99→    99→  live: { label: 'Live', icon: Radio, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-950/30' },
+   100→   100→  image: { label: 'Image', icon: ImageIcon, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-950/30' },
+   101→   101→  audio: { label: 'Audio', icon: Music, color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-950/30' },
+   102→   102→  quiz: { label: 'Quiz', icon: Award, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
+   103→   103→  code: { label: 'Code', icon: FileCode, color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-950/30' },
+   104→   104→  folder: { label: 'Folder', icon: Folder, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+   105→   105→}
+   106→   106→
+   107→   107→export function CourseContentManager({ courseId, courseTitle, onBack }: CourseContentManagerProps) {
+   108→   108→  const [modules, setModules] = useState<Module[]>([])
+   109→   109→  const [courseInfo, setCourseInfo] = useState<CourseInfo | null>(null)
+   110→   110→  const [loading, setLoading] = useState(true)
+   111→   111→  const [activeTab, setActiveTab] = useState('content')
+   112→   112→  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+   113→   113→  const [contentSearch, setContentSearch] = useState('')
+   114→   114→  const [saving, setSaving] = useState(false)
+   115→   115→
+   116→   116→  // Module dialog
+   117→   117→  const [moduleDialogOpen, setModuleDialogOpen] = useState(false)
+   118→   118→  const [moduleTitle, setModuleTitle] = useState('')
+   119→   119→  const [moduleDesc, setModuleDesc] = useState('')
+   120→   120→  const [editingModuleId, setEditingModuleId] = useState<string | null>(null)
+   121→   121→
+   122→   122→  // Lesson dialog
+   123→   123→  const [lessonDialogOpen, setLessonDialogOpen] = useState(false)
+   124→   124→  const [lessonModuleId, setLessonModuleId] = useState('')
+   125→   125→  const [editingLessonId, setEditingLessonId] = useState<string | null>(null)
+   126→   126→  const [lessonData, setLessonData] = useState({
+   127→   127→    title: '', type: 'video', content: '', videoUrl: '', videoDuration: '0',
+   128→   128→    fileUrl: '', notes: '', isFree: false,
+   129→   129→  })
+   130→   130→
+   131→   131→  const fetchModules = useCallback(async () => {
+   132→   132→    setLoading(true)
+   133→   133→    try {
+   134→   134→      const res = await apiFetch(`/api/teacher/courses/${courseId}`)
+   135→   135→      const data = await res.json()
+   136→   136→      setModules(data.modules || [])
+   137→   137→      setCourseInfo({
+   138→   138→        id: courseId,
+   139→   139→        title: data.title || courseTitle,
+   140→   140→        description: data.description,
+   141→   141→        thumbnail: data.thumbnail,
+   142→   142→        price: data.price,
+   143→   143→        mrp: data.mrp,
+   144→   144→        status: data.status,
+   145→   145→        category: data.category,
+   146→   146→        level: data.level,
+   147→   147→      })
+   148→   148→    } catch {
+   149→   149→      toast.error('Failed to load course')
+   150→   150→    } finally {
+   151→   151→      setLoading(false)
+   152→   152→    }
+   153→   153→  }, [courseId, courseTitle])
+   154→   154→
+   155→   155→  useEffect(() => { fetchModules() }, [fetchModules])
+   156→   156→
+   157→   157→  // ── Module handlers ──
+   158→   158→  const handleSaveModule = async () => {
+   159→   159→    if (!moduleTitle.trim()) { toast.error('Module title required'); return }
+   160→   160→    setSaving(true)
+   161→   161→    try {
+   162→   162→      if (editingModuleId) {
+   163→   163→        await apiFetch(`/api/teacher/courses/${courseId}/modules?id=${moduleId}`, {
+   164→   164→          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+   165→   165→          body: JSON.stringify({ id: editingModuleId, title: moduleTitle, description: moduleDesc })
+   166→   166→        })
+   167→   167→        toast.success('Module updated')
+   168→   168→      } else {
+   169→   169→        await apiFetch(`/api/teacher/courses/${courseId}/modules?id=${moduleId}`, {
+   170→   170→          method: 'POST', headers: { 'Content-Type': 'application/json' },
+   171→   171→          body: JSON.stringify({ title: moduleTitle, description: moduleDesc })
+   172→   172→        })
+   173→   173→        toast.success('Module added')
+   174→   174→      }
+   175→   175→      setModuleDialogOpen(false)
+   176→   176→      setModuleTitle(''); setModuleDesc(''); setEditingModuleId(null)
+   177→   177→      fetchModules()
+   178→   178→    } catch { toast.error('Failed to save module') }
+   179→   179→    finally { setSaving(false) }
+   180→   180→  }
+   181→   181→
+   182→   182→  const deleteModule = async (moduleId: string) => {
+   183→   183→    if (!confirm('Delete this module and all its lessons?')) return
+   184→   184→    try {
+   185→   185→      await apiFetch(`/api/teacher/courses/${courseId}/modules?id=${moduleId}`, {
+   186→   186→        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+   187→   187→        
+   188→   188→      })
+   189→   189→      toast.success('Module deleted')
+   190→   190→      fetchModules()
+   191→   191→    } catch { toast.error('Failed to delete module') }
+   192→   192→  }
+   193→   193→
+   194→   194→  // ── Lesson handlers ──
+   195→   195→  const openAddLesson = (moduleId: string, type: string = 'video') => {
+   196→   196→    setLessonModuleId(moduleId)
+   197→   197→    setLessonData({ title: '', type, content: '', videoUrl: '', videoDuration: '0', fileUrl: '', notes: '', isFree: false })
+   198→   198→    setEditingLessonId(null)
+   199→   199→    setLessonDialogOpen(true)
+   200→   200→  }
+   201→   201→
+   202→   202→  const handleSaveLesson = async () => {
+   203→   203→    if (!lessonData.title.trim()) { toast.error('Lesson title required'); return }
+   204→   204→    setSaving(true)
+   205→   205→    try {
+   206→   206→      const url = `/api/teacher/courses/${courseId}/modules/lessons?moduleId=${lessonModuleId}`
+   207→   207→      const payload = { ...lessonData, videoDuration: parseInt(lessonData.videoDuration) || 0 }
+   208→   208→
+   209→   209→      if (editingLessonId) {
+   210→   210→        await apiFetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lessonId: editingLessonId, ...payload }) })
+   211→   211→        toast.success('Lesson updated')
+   212→   212→      } else {
+   213→   213→        await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+   214→   214→        toast.success('Lesson added')
+   215→   215→      }
+   216→   216→      setLessonDialogOpen(false)
+   217→   217→      setLessonData({ title: '', type: 'video', content: '', videoUrl: '', videoDuration: '0', fileUrl: '', notes: '', isFree: false })
+   218→   218→      setEditingLessonId(null)
+   219→   219→      fetchModules()
+   220→   220→    } catch (err: any) { toast.error(err.message || 'Failed to save lesson') }
+   221→   221→    finally { setSaving(false) }
+   222→   222→  }
+   223→   223→
+   224→   224→  const deleteLesson = async (moduleId: string, lessonId: string) => {
+   225→   225→    if (!confirm('Delete this lesson?')) return
+   226→   226→    try {
+   227→   227→      await apiFetch(`/api/teacher/courses/${courseId}/modules/lessons?moduleId=${moduleId}&lessonId=${lessonId}`, { method: 'DELETE' })
+   228→   228→      toast.success('Lesson deleted')
+   229→   229→      fetchModules()
+   230→   230→    } catch { toast.error('Failed to delete lesson') }
+   231→   231→  }
+   232→   232→
+   233→   233→  const toggleFree = async (moduleId: string, lesson: Lesson) => {
+   234→   234→    try {
+   235→   235→      await apiFetch(`/api/teacher/courses/${courseId}/modules/lessons?moduleId=${moduleId}`, {
+   236→   236→        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+   237→   237→        body: JSON.stringify({ lessonId: lesson.id, isFree: !lesson.isFree })
+   238→   238→      })
+   239→   239→      fetchModules()
+   240→   240→    } catch { toast.error('Failed to update') }
+   241→   241→  }
+   242→   242→
+   243→   243→  const togglePublish = async () => {
+   244→   244→    if (!courseInfo) return
+   245→   245→    try {
+   246→   246→      await apiFetch(`/api/teacher/courses/${courseId}`, {
+   247→   247→        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+   248→   248→        body: JSON.stringify({ status: courseInfo.status === 'published' ? 'draft' : 'published' })
+   249→   249→      })
+   250→   250→      toast.success(courseInfo.status === 'published' ? 'Unpublished' : 'Published')
+   251→   251→      fetchModules()
+   252→   252→    } catch { toast.error('Failed') }
+   253→   253→  }
+   254→   254→
+   255→   255→  const handleFileUpload = async (file: File, field: 'videoUrl' | 'fileUrl') => {
+   256→   256→    if (!file) return
+   257→   257→    try {
+   258→   258→      const fd = new FormData()
+   259→   259→      fd.append('file', file)
+   260→   260→      const res = await apiFetch('/api/teacher/upload-image', { method: 'POST', body: fd })
+   261→   261→      const data = await res.json()
+   262→   262→      if (!res.ok) throw new Error(data.error)
+   263→   263→      setLessonData(prev => ({ ...prev, [field]: data.url }))
+   264→   264→      toast.success('File uploaded!')
+   265→   265→    } catch (err: any) { toast.error(err.message || 'Upload failed') }
+   266→   266→  }
+   267→   267→
+   268→   268→  // Get all lessons flattened for the content list
+   269→   269→  const allLessons = modules.flatMap(m => m.lessons.map(l => ({ ...l, moduleTitle: m.title, moduleId: m.id })))
+   270→   270→  const filteredLessons = contentSearch
+   271→   271→    ? allLessons.filter(l => l.title.toLowerCase().includes(contentSearch.toLowerCase()))
+   272→   272→    : allLessons
+   273→   273→
+   274→   274→  if (loading) {
+   275→   275→    return <div className="flex items-center justify-center h-96"><Loader2 className="w-6 h-6 animate-spin text-emerald-600" /></div>
+   276→   276→  }
+   277→   277→
+   278→   278→  return (
+   279→   279→    <div className="space-y-6">
+   280→   280→      {/* ── Header ── */}
+   281→   281→      <div className="flex items-center justify-between gap-4">
+   282→   282→        <div className="flex items-center gap-3">
+   283→   283→          <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
+   284→   284→          <div>
+   285→   285→            <h1 className="text-xl font-bold">{courseTitle}</h1>
+   286→   286→            <p className="text-sm text-muted-foreground">{courseInfo?.category} · {courseInfo?.level}</p>
+   287→   287→          </div>
+   288→   288→        </div>
+   289→   289→        <div className="flex gap-2">
+   290→   290→          <Button variant="outline" size="sm" className="gap-1" onClick={() => toast.info('Preview opened')}>
+   291→   291→            <Eye className="w-4 h-4" /> Preview
+   292→   292→          </Button>
+   293→   293→          <Button
+   294→   294→            size="sm"
+   295→   295→            variant={courseInfo?.status === 'published' ? 'default' : 'outline'}
+   296→   296→            onClick={togglePublish}
+   297→   297→            className={courseInfo?.status === 'published' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+   298→   298→          >
+   299→   299→            {courseInfo?.status === 'published' ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
+   300→   300→            {courseInfo?.status === 'published' ? 'Unpublish' : 'Publish'}
+   301→   301→          </Button>
+   302→   302→        </div>
+   303→   303→      </div>
+   304→   304→
+   305→   305→      {/* ── Tabs ── */}
+   306→   306→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   307→   307→        <TabsList>
+   308→   308→          <TabsTrigger value="overview">Overview</TabsTrigger>
+   309→   309→          <TabsTrigger value="content">Content</TabsTrigger>
+   310→   310→          <TabsTrigger value="forum" disabled>Forum</TabsTrigger>
+   311→   311→          <TabsTrigger value="chat" disabled>Chat</TabsTrigger>
+   312→   312→          <TabsTrigger value="posts" disabled>Posts</TabsTrigger>
+   313→   313→        </TabsList>
+   314→   314→
+   315→   315→        {/* ── Overview Tab ── */}
+   316→   316→        <TabsContent value="overview" className="space-y-4">
+   317→   317→          <div className="grid grid-cols-3 gap-4">
+   318→   318→            <Card><CardContent className="p-4 flex items-center gap-3">
+   319→   319→              <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
+   320→   320→                <Layers className="w-5 h-5 text-emerald-600" />
+   321→   321→              </div>
+   322→   322→              <div><p className="text-2xl font-bold">{modules.length}</p><p className="text-xs text-muted-foreground">Modules</p></div>
+   323→   323→            </CardContent></Card>
+   324→   324→            <Card><CardContent className="p-4 flex items-center gap-3">
+   325→   325→              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
+   326→   326→                <BookOpen className="w-5 h-5 text-blue-600" />
+   327→   327→              </div>
+   328→   328→              <div><p className="text-2xl font-bold">{allLessons.length}</p><p className="text-xs text-muted-foreground">Lessons</p></div>
+   329→   329→            </CardContent></Card>
+   330→   330→            <Card><CardContent className="p-4 flex items-center gap-3">
+   331→   331→              <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+   332→   332→                <Clock className="w-5 h-5 text-amber-600" />
+   333→   333→              </div>
+   334→   334→              <div><p className="text-2xl font-bold">{Math.floor(allLessons.reduce((s, l) => s + (l.videoDuration || 0), 0) / 60)}m</p><p className="text-xs text-muted-foreground">Duration</p></div>
+   335→   335→            </CardContent></Card>
+   336→   336→          </div>
+   337→   337→
+   338→   338→          {courseInfo?.description && (
+   339→   339→            <Card><CardContent className="p-4">
+   340→   340→              <h3 className="font-semibold mb-2">Course Description</h3>
+   341→   341→              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{courseInfo.description}</p>
+   342→   342→            </CardContent></Card>
+   343→   343→          )}
+   344→   344→
+   345→   345→          <Card><CardContent className="p-4">
+   346→   346→            <h3 className="font-semibold mb-3">Modules Overview</h3>
+   347→   347→            {modules.length === 0 ? (
+   348→   348→              <p className="text-sm text-muted-foreground">No modules yet. Go to Content tab to add modules.</p>
+   349→   349→            ) : (
+   350→   350→              <div className="space-y-2">
+   351→   351→                {modules.map((m, i) => (
+   352→   352→                  <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+   353→   353→                    <div className="flex items-center gap-3">
+   354→   354→                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 font-semibold text-sm">{i + 1}</div>
+   355→   355→                      <div>
+   356→   356→                        <p className="font-medium text-sm">{m.title}</p>
+   357→   357→                        <p className="text-xs text-muted-foreground">{m.lessons.length} lessons</p>
+   358→   358→                      </div>
+   359→   359→                    </div>
+   360→   360→                    <Button variant="outline" size="sm" onClick={() => { setActiveTab('content') }}>Manage</Button>
+   361→   361→                  </div>
+   362→   362→                ))}
+   363→   363→              </div>
+   364→   364→            )}
+   365→   365→          </CardContent></Card>
+   366→   366→        </TabsContent>
+   367→   367→
+   368→   368→        {/* ── Content Tab ── */}
+   369→   369→        <TabsContent value="content">
+   370→   370→          <div className="flex gap-6">
+   371→   371→            {/* Main Content Area */}
+   372→   372→            <div className="flex-1 space-y-4">
+   373→   373→              {/* Toolbar */}
+   374→   374→              <div className="flex items-center justify-between gap-4">
+   375→   375→                <div className="flex items-center gap-2 flex-1">
+   376→   376→                  <div className="relative flex-1 max-w-xs">
+   377→   377→                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   378→   378→                    <Input placeholder="Search content..." value={contentSearch} onChange={(e) => setContentSearch(e.target.value)} className="pl-9" />
+   379→   379→                  </div>
+   380→   380→                  <div className="flex gap-1">
+   381→   381→                    <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('list')}>
+   382→   382→                      <List className="w-4 h-4" />
+   383→   383→                    </Button>
+   384→   384→                    <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="icon" onClick={() => setViewMode('grid')}>
+   385→   385→                      <Grid3x3 className="w-4 h-4" />
+   386→   386→                    </Button>
+   387→   387→                  </div>
+   388→   388→                </div>
+   389→   389→                <Button onClick={() => { setEditingModuleId(null); setModuleTitle(''); setModuleDesc(''); setModuleDialogOpen(true) }} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+   390→   390→                  <Plus className="w-4 h-4" /> Add Module
+   391→   391→                </Button>
+   392→   392→              </div>
+   393→   393→
+   394→   394→              {/* Modules & Lessons */}
+   395→   395→              {modules.length === 0 ? (
+   396→   396→                <Card><CardContent className="p-12 text-center">
+   397→   397→                  <Layers className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
+   398→   398→                  <p className="text-muted-foreground mb-4">No modules yet. Create your first module!</p>
+   399→   399→                  <Button onClick={() => { setModuleTitle(''); setModuleDesc(''); setEditingModuleId(null); setModuleDialogOpen(true) }} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+   400→   400→                    <Plus className="w-4 h-4" /> Add First Module
+   401→   401→                  </Button>
+   402→   402→                </CardContent></Card>
+   403→   403→              ) : (
+   404→   404→                <div className="space-y-3">
+   405→   405→                  {modules.map((module, mIdx) => (
+   406→   406→                    <Card key={module.id} className="overflow-hidden">
+   407→   407→                      {/* Module Header */}
+   408→   408→                      <div className="flex items-center justify-between p-3 border-b bg-muted/20">
+   409→   409→                        <div className="flex items-center gap-3 flex-1">
+   410→   410→                          <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 font-semibold text-sm">
+   411→   411→                            {mIdx + 1}
+   412→   412→                          </div>
+   413→   413→                          <div>
+   414→   414→                            <h3 className="font-semibold text-sm">{module.title}</h3>
+   415→   415→                            <p className="text-xs text-muted-foreground">{module.lessons.length} lessons</p>
+   416→   416→                          </div>
+   417→   417→                        </div>
+   418→   418→                        <DropdownMenu>
+   419→   419→                          <DropdownMenuTrigger asChild>
+   420→   420→                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+   421→   421→                          </DropdownMenuTrigger>
+   422→   422→                          <DropdownMenuContent align="end">
+   423→   423→                            <DropdownMenuItem onClick={() => openAddLesson(module.id, 'video')}>
+   424→   424→                              <Plus className="w-3.5 h-3.5 mr-2" /> Add Lesson
+   425→   425→                            </DropdownMenuItem>
+   426→   426→                            <DropdownMenuItem onClick={() => { setEditingModuleId(module.id); setModuleTitle(module.title); setModuleDesc(module.description || ''); setModuleDialogOpen(true) }}>
+   427→   427→                              <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit Module
+   428→   428→                            </DropdownMenuItem>
+   429→   429→                            <DropdownMenuSeparator />
+   430→   430→                            <DropdownMenuItem onClick={() => deleteModule(module.id)} className="text-destructive">
+   431→   431→                              <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Module
+   432→   432→                            </DropdownMenuItem>
+   433→   433→                          </DropdownMenuContent>
+   434→   434→                        </DropdownMenu>
+   435→   435→                      </div>
+   436→   436→
+   437→   437→                      {/* Lessons List */}
+   438→   438→                      {module.lessons.length === 0 ? (
+   439→   439→                        <div className="p-4 text-center text-sm text-muted-foreground">
+   440→   440→                          No lessons. <button onClick={() => openAddLesson(module.id)} className="text-emerald-600 underline">Add one</button>
+   441→   441→                        </div>
+   442→   442→                      ) : (
+   443→   443→                        <div className="divide-y">
+   444→   444→                          {module.lessons.filter(l => !contentSearch || l.title.toLowerCase().includes(contentSearch.toLowerCase())).map((lesson, lIdx) => {
+   445→   445→                            const tc = TYPE_CONFIG[lesson.type] || TYPE_CONFIG.text
+   446→   446→                            return (
+   447→   447→                              <div key={lesson.id} className="flex items-center gap-3 p-3 hover:bg-muted/30 group">
+   448→   448→                                {/* Thumbnail / Icon */}
+   449→   449→                                <div className={`w-10 h-10 rounded-lg ${tc.bg} flex items-center justify-center shrink-0`}>
+   450→   450→                                  {lesson.videoUrl ? (
+   451→   451→                                    <img src={lesson.videoUrl} alt="" className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+   452→   452→                                  ) : null}
+   453→   453→                                  <tc.icon className={`w-5 h-5 ${tc.color} ${lesson.videoUrl ? 'hidden' : ''}`} />
+   454→   454→                                </div>
+   455→   455→
+   456→   456→                                {/* Title & Meta */}
+   457→   457→                                <div className="flex-1 min-w-0">
+   458→   458→                                  <div className="flex items-center gap-2">
+   459→   459→                                    <p className="font-medium text-sm truncate">{lesson.title}</p>
+   460→   460→                                    {lesson.isFree && <Badge className="text-xs bg-cyan-100 text-cyan-700">Free</Badge>}
+   461→   461→                                  </div>
+   462→   462→                                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+   463→   463→                                    <Badge variant="outline" className="text-xs">{tc.label}</Badge>
+   464→   464→                                    {lesson.videoDuration > 0 && (
+   465→   465→                                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {Math.floor(lesson.videoDuration / 60)}m {lesson.videoDuration % 60}s</span>
+   466→   466→                                    )}
+   467→   467→                                    {lesson.videoUrl && <span className="flex items-center gap-1"><Video className="w-3 h-3" /> Video</span>}
+   468→   468→                                    {lesson.fileUrl && <span className="flex items-center gap-1"><File className="w-3 h-3" /> File</span>}
+   469→   469→                                    {lesson.notes && <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> Notes</span>}
+   470→   470→                                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(lesson.createdAt).toLocaleDateString()}</span>
+   471→   471→                                  </div>
+   472→   472→                                </div>
+   473→   473→
+   474→   474→                                {/* Actions */}
+   475→   475→                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+   476→   476→                                  <Button variant="ghost" size="icon" className="h-8 w-8" title={lesson.isFree ? "Free preview" : "Locked"} onClick={() => toggleFree(module.id, lesson)}>
+   477→   477→                                    {lesson.isFree ? <Unlock className="w-3.5 h-3.5 text-cyan-500" /> : <Lock className="w-3.5 h-3.5 text-muted-foreground" />}
+   478→   478→                                  </Button>
+   479→   479→                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+   480→   480→                                    setLessonModuleId(module.id)
+   481→   481→                                    setEditingLessonId(lesson.id)
+   482→   482→                                    setLessonData({
+   483→   483→                                      title: lesson.title, type: lesson.type, content: lesson.content || '',
+   484→   484→                                      videoUrl: lesson.videoUrl || '', videoDuration: String(lesson.videoDuration),
+   485→   485→                                      fileUrl: lesson.fileUrl || '', notes: lesson.notes || '', isFree: lesson.isFree,
+   486→   486→                                    })
+   487→   487→                                    setLessonDialogOpen(true)
+   488→   488→                                  }}>
+   489→   489→                                    <Edit3 className="w-3.5 h-3.5" />
+   490→   490→                                  </Button>
+   491→   491→                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteLesson(module.id, lesson.id)}>
+   492→   492→                                    <Trash2 className="w-3.5 h-3.5" />
+   493→   493→                                  </Button>
+   494→   494→                                </div>
+   495→   495→                              </div>
+   496→   496→                            )
+   497→   497→                          })}
+   498→   498→                        </div>
+   499→   499→                      )}
+   500→   500→                    </Card>
+   501→   501→                  ))}
+   502→   502→                </div>
+   503→   503→              )}
+   504→   504→            </div>
+   505→   505→
+   506→   506→            {/* ── Right Sidebar: ADD CONTENT ── */}
+   507→   507→            <div className="hidden lg:block w-56 shrink-0">
+   508→   508→              <div className="sticky top-24">
+   509→   509→                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Add Content</p>
+   510→   510→                <div className="space-y-1">
+   511→   511→                  {ADD_CONTENT_TYPES.map(ct => (
+   512→   512→                    <button
+   513→   513→                      key={ct.type}
+   514→   514→                      onClick={() => {
+   515→   515→                        if (modules.length === 0) { toast.error('Create a module first'); return }
+   516→   516→                        openAddLesson(modules[0].id, ct.type === 'folder' ? 'text' : ct.type === 'youtube' || ct.type === 'webinar' ? 'live' : ct.type === 'subjective' || ct.type === 'omr' ? 'text' : ct.type)
+   517→   517→                      }}
+   518→   518→                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm hover:bg-muted/50 transition-colors text-left"
+   519→   519→                    >
+   520→   520→                      <ct.icon className={`w-4 h-4 ${ct.color}`} />
+   521→   521→                      <span>{ct.label}</span>
+   522→   522→                    </button>
+   523→   523→                  ))}
+   524→   524→                </div>
+   525→   525→              </div>
+   526→   526→            </div>
+   527→   527→          </div>
+   528→   528→        </TabsContent>
+   529→   529→
+   530→   530→        {/* ── Other tabs (placeholders) ── */}
+   531→   531→        <TabsContent value="forum">
+   532→   532→          <Card><CardContent className="p-12 text-center text-muted-foreground">Forum coming soon</CardContent></Card>
+   533→   533→        </TabsContent>
+   534→   534→        <TabsContent value="chat">
+   535→   535→          <Card><CardContent className="p-12 text-center text-muted-foreground">Chat coming soon</CardContent></Card>
+   536→   536→        </TabsContent>
+   537→   537→        <TabsContent value="posts">
+   538→   538→          <Card><CardContent className="p-12 text-center text-muted-foreground">Posts coming soon</CardContent></Card>
+   539→   539→        </TabsContent>
+   540→   540→      </Tabs>
+   541→   541→
+   542→   542→      {/* ── Module Dialog ── */}
+   543→   543→      <Dialog open={moduleDialogOpen} onOpenChange={setModuleDialogOpen}>
+   544→   544→        <DialogContent>
+   545→   545→          <DialogHeader><DialogTitle>{editingModuleId ? 'Edit Module' : 'Add Module'}</DialogTitle></DialogHeader>
+   546→   546→          <div className="space-y-4 py-2">
+   547→   547→            <div className="space-y-2">
+   548→   548→              <Label>Module Title *</Label>
+   549→   549→              <Input placeholder="e.g. Introduction to Arduino" value={moduleTitle} onChange={(e) => setModuleTitle(e.target.value)} />
+   550→   550→            </div>
+   551→   551→            <div className="space-y-2">
+   552→   552→              <Label>Description</Label>
+   553→   553→              <Textarea placeholder="What will students learn in this module?" value={moduleDesc} onChange={(e) => setModuleDesc(e.target.value)} rows={2} />
+   554→   554→            </div>
+   555→   555→          </div>
+   556→   556→          <DialogFooter>
+   557→   557→            <Button variant="outline" onClick={() => setModuleDialogOpen(false)}>Cancel</Button>
+   558→   558→            <Button onClick={handleSaveModule} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+   559→   559→              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+   560→   560→              {editingModuleId ? 'Update' : 'Add'} Module
+   561→   561→            </Button>
+   562→   562→          </DialogFooter>
+   563→   563→        </DialogContent>
+   564→   564→      </Dialog>
+   565→   565→
+   566→   566→      {/* ── Lesson Dialog ── */}
+   567→   567→      <Dialog open={lessonDialogOpen} onOpenChange={setLessonDialogOpen}>
+   568→   568→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   569→   569→          <DialogHeader><DialogTitle>{editingLessonId ? 'Edit Lesson' : 'Add Lesson'}</DialogTitle></DialogHeader>
+   570→   570→          <div className="space-y-4 py-2">
+   571→   571→            <div className="space-y-2">
+   572→   572→              <Label>Lesson Title *</Label>
+   573→   573→              <Input placeholder="e.g. What is Arduino? - Complete Overview" value={lessonData.title} onChange={(e) => setLessonData({ ...lessonData, title: e.target.value })} />
+   574→   574→            </div>
+   575→   575→
+   576→   576→            {/* Content Type Selector */}
+   577→   577→            <div className="space-y-2">
+   578→   578→              <Label>Content Type</Label>
+   579→   579→              <div className="flex flex-wrap gap-2">
+   580→   580→                {Object.entries(TYPE_CONFIG).filter(([k]) => k !== 'folder').map(([key, tc]) => (
+   581→   581→                  <button key={key} onClick={() => setLessonData({ ...lessonData, type: key })}
+   582→   582→                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all ${lessonData.type === key ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-border hover:border-emerald-400'}`}>
+   583→   583→                    <tc.icon className={`w-4 h-4 ${tc.color}`} /><span className="text-sm font-medium">{tc.label}</span>
+   584→   584→                  </button>
+   585→   585→                ))}
+   586→   586→              </div>
+   587→   587→            </div>
+   588→   588→
+   589→   589→            {/* Video URL */}
+   590→   590→            {(lessonData.type === 'video' || lessonData.type === 'live') && (
+   591→   591→              <div className="space-y-2">
+   592→   592→                <Label>Video URL *</Label>
+   593→   593→                <div className="flex gap-2">
+   594→   594→                  <Input placeholder="https://youtube.com/watch?v=..." value={lessonData.videoUrl} onChange={(e) => setLessonData({ ...lessonData, videoUrl: e.target.value })} />
+   595→   595→                  <Button variant="outline" size="icon" onClick={() => document.getElementById('video-upload')?.click()}><Upload className="w-4 h-4" /></Button>
+   596→   596→                  <input id="video-upload" type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'videoUrl') }} />
+   597→   597→                </div>
+   598→   598→                <p className="text-xs text-muted-foreground">Paste YouTube/Vimeo URL or upload video file</p>
+   599→   599→              </div>
+   600→   600→            )}
+   601→   601→
+   602→   602→            {/* File URL */}
+   603→   603→            {(lessonData.type === 'pdf' || lessonData.type === 'audio' || lessonData.type === 'image' || lessonData.type === 'code') && (
+   604→   604→              <div className="space-y-2">
+   605→   605→                <Label>{lessonData.type === 'pdf' ? 'PDF File' : lessonData.type === 'audio' ? 'Audio File' : lessonData.type === 'image' ? 'Image File' : 'Code File'} *</Label>
+   606→   606→                <div className="flex gap-2">
+   607→   607→                  <Input placeholder="https://... or upload" value={lessonData.fileUrl} onChange={(e) => setLessonData({ ...lessonData, fileUrl: e.target.value })} />
+   608→   608→                  <Button variant="outline" size="icon" onClick={() => document.getElementById('file-upload')?.click()}><Upload className="w-4 h-4" /></Button>
+   609→   609→                  <input id="file-upload" type="file" accept={lessonData.type === 'pdf' ? '.pdf' : lessonData.type === 'audio' ? 'audio/*' : lessonData.type === 'image' ? 'image/*' : '.txt,.js,.py'} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'fileUrl') }} />
+   610→   610→                </div>
+   611→   611→              </div>
+   612→   612→            )}
+   613→   613→
+   614→   614→            {/* External Link */}
+   615→   615→            {lessonData.type === 'link' && (
+   616→   616→              <div className="space-y-2">
+   617→   617→                <Label>External Link URL *</Label>
+   618→   618→                <Input placeholder="https://..." value={lessonData.fileUrl} onChange={(e) => setLessonData({ ...lessonData, fileUrl: e.target.value })} />
+   619→   619→              </div>
+   620→   620→            )}
+   621→   621→
+   622→   622→            {/* Text Content */}
+   623→   623→            {(lessonData.type === 'text' || lessonData.type === 'quiz') && (
+   624→   624→              <div className="space-y-2">
+   625→   625→                <Label>Content *</Label>
+   626→   626→                <Textarea placeholder="Write lesson content (supports markdown)..." value={lessonData.content} onChange={(e) => setLessonData({ ...lessonData, content: e.target.value })} rows={6} />
+   627→   627→              </div>
+   628→   628→            )}
+   629→   629→
+   630→   630→            {/* Duration + Free Toggle */}
+   631→   631→            <div className="grid grid-cols-2 gap-4">
+   632→   632→              <div className="space-y-2">
+   633→   633→                <Label>Duration (seconds)</Label>
+   634→   634→                <Input type="number" min="0" placeholder="0" value={lessonData.videoDuration} onChange={(e) => setLessonData({ ...lessonData, videoDuration: e.target.value })} />
+   635→   635→                <p className="text-xs text-muted-foreground">e.g. 600 = 10 minutes</p>
+   636→   636→              </div>
+   637→   637→              <div className="flex items-center justify-between p-3 rounded-lg border">
+   638→   638→                <div>
+   639→   639→                  <Label className="cursor-pointer">Free Preview</Label>
+   640→   640→                  <p className="text-xs text-muted-foreground">Accessible without enrollment</p>
+   641→   641→                </div>
+   642→   642→                <Switch checked={lessonData.isFree} onCheckedChange={(v) => setLessonData({ ...lessonData, isFree: v })} />
+   643→   643→              </div>
+   644→   644→            </div>
+   645→   645→
+   646→   646→            {/* Notes */}
+   647→   647→            <div className="space-y-2">
+   648→   648→              <Label>Additional Notes</Label>
+   649→   649→              <Textarea placeholder="Notes or instructions for this lesson..." value={lessonData.notes} onChange={(e) => setLessonData({ ...lessonData, notes: e.target.value })} rows={2} />
+   650→   650→            </div>
+   651→   651→          </div>
+   652→   652→          <DialogFooter>
+   653→   653→            <Button variant="outline" onClick={() => setLessonDialogOpen(false)}>Cancel</Button>
+   654→   654→            <Button onClick={handleSaveLesson} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+   655→   655→              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+   656→   656→              {editingLessonId ? 'Update' : 'Add'} Lesson
+   657→   657→            </Button>
+   658→   658→          </DialogFooter>
+   659→   659→        </DialogContent>
+   660→   660→      </Dialog>
+   661→   661→    </div>
+   662→   662→  )
+   663→   663→}
+   664→   664→

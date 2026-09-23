@@ -1,0 +1,4 @@
+﻿student-app/**
+student-mobile-app/**
+.next/**
+node_modules/**

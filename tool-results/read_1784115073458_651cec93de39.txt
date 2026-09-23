@@ -1,0 +1,1289 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react'
+     4→import { useAppStore } from '@/lib/store'
+     5→import { apiFetchJSON } from '@/lib/api-client'
+     6→
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Switch } from '@/components/ui/switch'
+    12→import { Textarea } from '@/components/ui/textarea'
+    13→import { Separator } from '@/components/ui/separator'
+    14→import { Card, CardContent } from '@/components/ui/card'
+    15→import { Skeleton } from '@/components/ui/skeleton'
+    16→import {
+    17→  Select,
+    18→  SelectContent,
+    19→  SelectItem,
+    20→  SelectTrigger,
+    21→  SelectValue,
+    22→} from '@/components/ui/select'
+    23→import {
+    24→  Sheet,
+    25→  SheetContent,
+    26→  SheetHeader,
+    27→  SheetTitle,
+    28→  SheetDescription,
+    29→} from '@/components/ui/sheet'
+    30→import {
+    31→  Tabs,
+    32→  TabsContent,
+    33→  TabsList,
+    34→  TabsTrigger,
+    35→} from '@/components/ui/tabs'
+    36→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+    37→import {
+    38→  DropdownMenu,
+    39→  DropdownMenuContent,
+    40→  DropdownMenuItem,
+    41→  DropdownMenuSeparator,
+    42→  DropdownMenuTrigger,
+    43→} from '@/components/ui/dropdown-menu'
+    44→import {
+    45→  Dialog,
+    46→  DialogContent,
+    47→  DialogDescription,
+    48→  DialogFooter,
+    49→  DialogHeader,
+    50→  DialogTitle,
+    51→} from '@/components/ui/dialog'
+    52→import {
+    53→  Pagination,
+    54→  PaginationContent,
+    55→  PaginationItem,
+    56→  PaginationLink,
+    57→  PaginationNext,
+    58→  PaginationPrevious,
+    59→} from '@/components/ui/pagination'
+    60→import {
+    61→  Search,
+    62→  Plus,
+    63→  Pencil,
+    64→  Eye,
+    65→  Copy,
+    66→  Trash2,
+    67→  LayoutGrid,
+    68→  List,
+    69→  MoreHorizontal,
+    70→  Upload,
+    71→  Filter,
+    72→  X,
+    73→  Package,
+    74→  ImagePlus,
+    75→  AlertCircle,
+    76→} from 'lucide-react'
+    77→import { toast } from 'sonner'
+    78→
+    79→// ── Types ────────────────────────────────────────────────────────────────────
+    80→
+    81→interface TestSeriesItem {
+    82→  id: string
+    83→  title: string
+    84→  thumbnail: string | null
+    85→  isCombo: boolean
+    86→  price: number
+    87→  mrp: number
+    88→  sortOrder: number
+    89→  status: 'published' | 'draft'
+    90→  category: string
+    91→  testCount: number
+    92→  [key: string]: unknown
+    93→}
+    94→
+    95→interface TestOption {
+    96→  id: string
+    97→  title: string
+    98→}
+    99→
+   100→interface CategoryOption {
+   101→  id: string
+   102→  name: string
+   103→}
+   104→
+   105→interface FormData {
+   106→  title: string
+   107→  description: string
+   108→  category: string
+   109→  price: string
+   110→  mrp: string
+   111→  validityMode: 'days' | 'date' | 'lifetime'
+   112→  validityDays: string
+   113→  validityDate: string
+   114→  isCombo: boolean
+   115→  selectedTests: string[]
+   116→  includeTestMaker: boolean
+   117→  allowPayment: boolean
+   118→  seoTitle: string
+   119→  seoDescription: string
+   120→  richSnippets: boolean
+   121→  imagePreview: string | null
+   122→  status: 'published' | 'draft'
+   123→  sortOrder: string
+   124→}
+   125→
+   126→interface PaginatedResponse<T> {
+   127→  items: T[]
+   128→  total: number
+   129→  page: number
+   130→  limit: number
+   131→}
+   132→
+   133→// ── Category color map ───────────────────────────────────────────────────────
+   134→
+   135→const categoryColors: Record<string, string> = {
+   136→  JEE: 'bg-rose-500',
+   137→  NEET: 'bg-emerald-500',
+   138→  CUET: 'bg-purple-500',
+   139→  GATE: 'bg-orange-500',
+   140→  UPSC: 'bg-rose-500',
+   141→  CAT: 'bg-amber-500',
+   142→  Other: 'bg-slate-500',
+   143→}
+   144→
+   145→// ── Default form ─────────────────────────────────────────────────────────────
+   146→
+   147→const defaultFormData: FormData = {
+   148→  title: '',
+   149→  description: '',
+   150→  category: '',
+   151→  price: '',
+   152→  mrp: '',
+   153→  validityMode: 'days',
+   154→  validityDays: '',
+   155→  validityDate: '',
+   156→  isCombo: false,
+   157→  selectedTests: [],
+   158→  includeTestMaker: false,
+   159→  allowPayment: true,
+   160→  seoTitle: '',
+   161→  seoDescription: '',
+   162→  richSnippets: false,
+   163→  imagePreview: null,
+   164→  status: 'draft',
+   165→  sortOrder: '',
+   166→}
+   167→
+   168→// ── Component ────────────────────────────────────────────────────────────────
+   169→
+   170→export default function TestSeriesList() {
+   171→  const { orgCode } = useAppStore()
+   172→
+   173→  // List state
+   174→  const [searchQuery, setSearchQuery] = useState('')
+   175→  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+   176→  const [statusFilter, setStatusFilter] = useState<string>('all')
+   177→  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+   178→  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+   179→  const [currentPageNum, setCurrentPageNum] = useState(1)
+   180→
+   181→  // API-driven state
+   182→  const [series, setSeries] = useState<TestSeriesItem[]>([])
+   183→  const [totalItems, setTotalItems] = useState(0)
+   184→  const [loading, setLoading] = useState(true)
+   185→  const [error, setError] = useState<string | null>(null)
+   186→
+   187→  // Drawer state
+   188→  const [drawerOpen, setDrawerOpen] = useState(false)
+   189→  const [activeTab, setActiveTab] = useState<string>('basic')
+   190→  const [saving, setSaving] = useState(false)
+   191→  const [editingId, setEditingId] = useState<string | null>(null)
+   192→
+   193→  // Delete dialog
+   194→  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+   195→  const [seriesToDelete, setSeriesToDelete] = useState<TestSeriesItem | null>(null)
+   196→  const [deleting, setDeleting] = useState(false)
+   197→
+   198→  // Form state
+   199→  const [formData, setFormData] = useState<FormData>({ ...defaultFormData })
+   200→
+   201→  // Reference data from API
+   202→  const [categories, setCategories] = useState<CategoryOption[]>([])
+   203→  const [testOptions, setTestOptions] = useState<TestOption[]>([])
+   204→  const [loadingTests, setLoadingTests] = useState(false)
+   205→
+   206→  const itemsPerPage = 20
+   207→
+   208→  const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+   209→    setFormData((prev) => ({ ...prev, [key]: value }))
+   210→  }
+   211→
+   212→  const resetForm = () => {
+   213→    setFormData({ ...defaultFormData })
+   214→    setActiveTab('basic')
+   215→    setEditingId(null)
+   216→  }
+   217→
+   218→  // ── Fetch test series list ───────────────────────────────────────────────
+   219→
+   220→  const fetchSeries = useCallback(async () => {
+   221→    if (!orgCode) return
+   222→    setLoading(true)
+   223→    setError(null)
+   224→    try {
+   225→      const params = new URLSearchParams({
+   226→        search: searchQuery,
+   227→        page: String(currentPageNum),
+   228→        limit: String(itemsPerPage),
+   229→        organizationId: orgCode,
+   230→      })
+   231→      if (categoryFilter !== 'all') params.set('category', categoryFilter)
+   232→      if (statusFilter !== 'all') params.set('status', statusFilter)
+   233→
+   234→      const data = await apiFetchJSON<PaginatedResponse<TestSeriesItem>>(
+   235→        `/api/teacher/test-series?${params.toString()}`
+   236→      )
+   237→      setSeries(data.items || [])
+   238→      setTotalItems(data.total || 0)
+   239→    } catch (err) {
+   240→      console.error('Failed to fetch test series:', err)
+   241→      setError('Failed to load test series. Please try again.')
+   242→    } finally {
+   243→      setLoading(false)
+   244→    }
+   245→  }, [orgCode, searchQuery, currentPageNum, categoryFilter, statusFilter])
+   246→
+   247→  // ── Fetch categories ─────────────────────────────────────────────────────
+   248→
+   249→  const fetchCategories = useCallback(async () => {
+   250→    if (!orgCode) return
+   251→    try {
+   252→      const data = await apiFetchJSON<{ items: CategoryOption[] }>(
+   253→        `/api/categories?organizationId=${orgCode}&limit=100`
+   254→      )
+   255→      setCategories(data.items || [])
+   256→    } catch {
+   257→      // Silently fail
+   258→    }
+   259→  }, [orgCode])
+   260→
+   261→  // ── Fetch test options for combo selection ───────────────────────────────
+   262→
+   263→  const fetchTestOptions = useCallback(async () => {
+   264→    if (!orgCode) return
+   265→    setLoadingTests(true)
+   266→    try {
+   267→      const data = await apiFetchJSON<PaginatedResponse<TestOption>>(
+   268→        `/api/tests?organizationId=${orgCode}&limit=100`
+   269→      )
+   270→      setTestOptions(data.items || [])
+   271→    } catch {
+   272→      // Silently fail
+   273→    } finally {
+   274→      setLoadingTests(false)
+   275→    }
+   276→  }, [orgCode])
+   277→
+   278→  useEffect(() => {
+   279→    fetchSeries()
+   280→  }, [fetchSeries])
+   281→
+   282→  useEffect(() => {
+   283→    fetchCategories()
+   284→  }, [fetchCategories])
+   285→
+   286→  // Load test options when drawer opens with combo enabled
+   287→  useEffect(() => {
+   288→    if (drawerOpen) {
+   289→      fetchTestOptions()
+   290→    }
+   291→  }, [drawerOpen, fetchTestOptions])
+   292→
+   293→  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
+   294→
+   295→  const discount = (price: number, mrp: number) =>
+   296→    mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0
+   297→
+   298→  // ── Delete handler ───────────────────────────────────────────────────────
+   299→
+   300→  const handleDelete = async () => {
+   301→    if (!seriesToDelete) return
+   302→    setDeleting(true)
+   303→    try {
+   304→      await apiFetchJSON(`/api/teacher/test-series/${seriesToDelete.id}`, { method: 'DELETE' })
+   305→      toast.success('Test series deleted successfully')
+   306→      setDeleteDialogOpen(false)
+   307→      setSeriesToDelete(null)
+   308→      fetchSeries()
+   309→    } catch {
+   310→      toast.error('Failed to delete test series')
+   311→    } finally {
+   312→      setDeleting(false)
+   313→    }
+   314→  }
+   315→
+   316→  // ── Open drawer for edit ─────────────────────────────────────────────────
+   317→
+   318→  const openEditDrawer = (item: TestSeriesItem) => {
+   319→    setEditingId(item.id)
+   320→    setFormData({
+   321→      title: item.title || '',
+   322→      description: (item.description as string) || '',
+   323→      category: item.category || '',
+   324→      price: item.price?.toString() || '',
+   325→      mrp: item.mrp?.toString() || '',
+   326→      validityMode: (item.validityMode as FormData['validityMode']) || 'days',
+   327→      validityDays: (item.validityDays as string)?.toString() || '',
+   328→      validityDate: (item.validityDate as string) || '',
+   329→      isCombo: item.isCombo || false,
+   330→      selectedTests: (item.selectedTests as string[]) || [],
+   331→      includeTestMaker: (item.includeTestMaker as boolean) || false,
+   332→      allowPayment: (item.allowPayment as boolean) ?? true,
+   333→      seoTitle: (item.seoTitle as string) || '',
+   334→      seoDescription: (item.seoDescription as string) || '',
+   335→      richSnippets: (item.richSnippets as boolean) || false,
+   336→      imagePreview: item.thumbnail || null,
+   337→      status: item.status || 'draft',
+   338→      sortOrder: item.sortOrder?.toString() || '',
+   339→    })
+   340→    setActiveTab('basic')
+   341→    setDrawerOpen(true)
+   342→  }
+   343→
+   344→  // ── Submit handler ───────────────────────────────────────────────────────
+   345→
+   346→  const handleSubmit = async () => {
+   347→    if (!formData.title.trim()) {
+   348→      toast.error('Title is required')
+   349→      return
+   350→    }
+   351→
+   352→    setSaving(true)
+   353→    try {
+   354→      const body: Record<string, unknown> = {
+   355→        title: formData.title,
+   356→        description: formData.description,
+   357→        category: formData.category,
+   358→        price: formData.price ? Number(formData.price) : 0,
+   359→        mrp: formData.mrp ? Number(formData.mrp) : 0,
+   360→        validityMode: formData.validityMode,
+   361→        validityDays: formData.validityDays ? Number(formData.validityDays) : undefined,
+   362→        validityDate: formData.validityDate || undefined,
+   363→        isCombo: formData.isCombo,
+   364→        selectedTests: formData.isCombo ? formData.selectedTests : [],
+   365→        includeTestMaker: formData.includeTestMaker,
+   366→        allowPayment: formData.allowPayment,
+   367→        seoTitle: formData.seoTitle || undefined,
+   368→        seoDescription: formData.seoDescription || undefined,
+   369→        richSnippets: formData.richSnippets,
+   370→        status: formData.status,
+   371→        sortOrder: formData.sortOrder ? Number(formData.sortOrder) : undefined,
+   372→        thumbnail: formData.imagePreview || undefined,
+   373→        organizationId: orgCode,
+   374→      }
+   375→
+   376→      if (editingId) {
+   377→        await apiFetchJSON(`/api/teacher/test-series/${editingId}`, {
+   378→          method: 'PUT',
+   379→          body: JSON.stringify(body),
+   380→        })
+   381→        toast.success('Test series updated successfully')
+   382→      } else {
+   383→        await apiFetchJSON('/api/teacher/test-series', {
+   384→          method: 'POST',
+   385→          body: JSON.stringify(body),
+   386→        })
+   387→        toast.success('Test series created successfully')
+   388→      }
+   389→
+   390→      setDrawerOpen(false)
+   391→      resetForm()
+   392→      fetchSeries()
+   393→    } catch (err) {
+   394→      console.error('Failed to save test series:', err)
+   395→      toast.error(editingId ? 'Failed to update test series' : 'Failed to create test series')
+   396→    } finally {
+   397→      setSaving(false)
+   398→    }
+   399→  }
+   400→
+   401→  // ── Render ───────────────────────────────────────────────────────────────
+   402→
+   403→  return (
+   404→    <div className="space-y-5">
+   405→      {/* ── Header row ──────────────────────────────────────────────────── */}
+   406→      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   407→        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Test Series</h1>
+   408→        <Button
+   409→          className="w-full sm:w-fit"
+   410→          onClick={() => {
+   411→            resetForm()
+   412→            setDrawerOpen(true)
+   413→          }}
+   414→        >
+   415→          <Plus className="mr-2 h-4 w-4" />
+   416→          Add Test Series
+   417→        </Button>
+   418→      </div>
+   419→
+   420→      {/* ── Search / Filter / View toggle bar ───────────────────────────── */}
+   421→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+   422→        {/* Search */}
+   423→        <div className="relative flex-1">
+   424→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   425→          <Input
+   426→            placeholder="Search test series..."
+   427→            value={searchQuery}
+   428→            onChange={(e) => {
+   429→              setSearchQuery(e.target.value)
+   430→              setCurrentPageNum(1)
+   431→            }}
+   432→            className="pl-9 rounded-lg"
+   433→          />
+   434→        </div>
+   435→
+   436→        {/* Filter */}
+   437→        <div className="relative">
+   438→          <Button
+   439→            variant="outline"
+   440→            size="sm"
+   441→            className="gap-2"
+   442→            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+   443→          >
+   444→            <Filter className="h-4 w-4" />
+   445→            Filters
+   446→            {(categoryFilter !== 'all' || statusFilter !== 'all') && (
+   447→              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+   448→                {(categoryFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0)}
+   449→              </span>
+   450→            )}
+   451→          </Button>
+   452→
+   453→          {showFilterDropdown && (
+   454→            <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border bg-white p-4 shadow-lg">
+   455→              <div className="mb-3 flex items-center justify-between">
+   456→                <span className="text-sm font-semibold">Filters</span>
+   457→                <button
+   458→                  onClick={() => setShowFilterDropdown(false)}
+   459→                  className="text-muted-foreground hover:text-foreground"
+   460→                >
+   461→                  <X className="h-4 w-4" />
+   462→                </button>
+   463→              </div>
+   464→              <div className="space-y-3">
+   465→                <div>
+   466→                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+   467→                    Category
+   468→                  </label>
+   469→                  <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setCurrentPageNum(1) }}>
+   470→                    <SelectTrigger className="w-full">
+   471→                      <SelectValue />
+   472→                    </SelectTrigger>
+   473→                    <SelectContent>
+   474→                      <SelectItem value="all">All Categories</SelectItem>
+   475→                      {categories.length > 0
+   476→                        ? categories.map((c) => (
+   477→                            <SelectItem key={c.id} value={c.name}>
+   478→                              {c.name}
+   479→                            </SelectItem>
+   480→                          ))
+   481→                        : ['JEE', 'NEET', 'CUET', 'GATE', 'UPSC', 'CAT', 'Other'].map((c) => (
+   482→                            <SelectItem key={c} value={c}>
+   483→                              {c}
+   484→                            </SelectItem>
+   485→                          ))
+   486→                      }
+   487→                    </SelectContent>
+   488→                  </Select>
+   489→                </div>
+   490→                <div>
+   491→                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+   492→                    Status
+   493→                  </label>
+   494→                  <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPageNum(1) }}>
+   495→                    <SelectTrigger className="w-full">
+   496→                      <SelectValue />
+   497→                    </SelectTrigger>
+   498→                    <SelectContent>
+   499→                      <SelectItem value="all">All Status</SelectItem>
+   500→                      <SelectItem value="published">Published</SelectItem>
+   501→                      <SelectItem value="draft">Draft</SelectItem>
+   502→                    </SelectContent>
+   503→                  </Select>
+   504→                </div>
+   505→                <Button
+   506→                  variant="ghost"
+   507→                  size="sm"
+   508→                  className="w-full"
+   509→                  onClick={() => {
+   510→                    setCategoryFilter('all')
+   511→                    setStatusFilter('all')
+   512→                    setCurrentPageNum(1)
+   513→                  }}
+   514→                >
+   515→                  Clear Filters
+   516→                </Button>
+   517→              </div>
+   518→            </div>
+   519→          )}
+   520→        </div>
+   521→
+   522→        {/* View toggle */}
+   523→        <div className="flex items-center rounded-lg border bg-muted p-0.5">
+   524→          <button
+   525→            onClick={() => setViewMode('list')}
+   526→            className={`flex items-center justify-center rounded-md p-1.5 transition-colors ${
+   527→              viewMode === 'list'
+   528→                ? 'bg-background text-foreground shadow-sm'
+   529→                : 'text-muted-foreground hover:text-foreground'
+   530→            }`}
+   531→          >
+   532→            <List className="h-4 w-4" />
+   533→          </button>
+   534→          <button
+   535→            onClick={() => setViewMode('grid')}
+   536→            className={`flex items-center justify-center rounded-md p-1.5 transition-colors ${
+   537→              viewMode === 'grid'
+   538→                ? 'bg-background text-foreground shadow-sm'
+   539→                : 'text-muted-foreground hover:text-foreground'
+   540→            }`}
+   541→          >
+   542→            <LayoutGrid className="h-4 w-4" />
+   543→          </button>
+   544→        </div>
+   545→      </div>
+   546→
+   547→      {/* ── Error state ────────────────────────────────────────────────── */}
+   548→      {error && (
+   549→        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+   550→          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+   551→          <span>{error}</span>
+   552→          <Button variant="ghost" size="sm" className="ml-auto" onClick={fetchSeries}>
+   553→            Retry
+   554→          </Button>
+   555→        </div>
+   556→      )}
+   557→
+   558→      {/* ── Loading skeletons ────────────────────────────────────────────── */}
+   559→      {loading ? (
+   560→        <div className="space-y-3">
+   561→          {Array.from({ length: 4 }).map((_, i) => (
+   562→            <Card key={i} className="overflow-hidden rounded-xl">
+   563→              <CardContent className="p-4">
+   564→                <div className="flex items-center gap-4">
+   565→                  <Skeleton className="h-14 w-14 rounded-lg" />
+   566→                  <div className="flex-1 space-y-2">
+   567→                    <Skeleton className="h-4 w-48" />
+   568→                    <Skeleton className="h-3 w-32" />
+   569→                  </div>
+   570→                  <Skeleton className="h-4 w-16" />
+   571→                  <Skeleton className="h-6 w-20" />
+   572→                </div>
+   573→              </CardContent>
+   574→            </Card>
+   575→          ))}
+   576→        </div>
+   577→      ) : series.length === 0 ? (
+   578→      /* ── Empty state ────────────────────────────────────────────────────── */
+   579→        <div className="flex items-center justify-center rounded-xl border bg-white py-16">
+   580→          <div className="text-center">
+   581→            <Package className="mx-auto h-12 w-12 text-muted-foreground/40" />
+   582→            <p className="mt-3 text-sm text-muted-foreground">No test series found.</p>
+   583→          </div>
+   584→        </div>
+   585→      ) : viewMode === 'list' ? (
+   586→        /* List view */
+   587→        <div className="space-y-3">
+   588→          {series.map((item) => (
+   589→            <Card key={item.id} className="overflow-hidden rounded-xl">
+   590→              <CardContent className="p-0">
+   591→                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-4">
+   592→                  {/* Thumbnail */}
+   593→                  <div
+   594→                    className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg text-white ${
+   595→                      categoryColors[item.category] || 'bg-slate-500'
+   596→                    }`}
+   597→                  >
+   598→                    <span className="text-lg font-bold">{(item.category || '?').charAt(0)}</span>
+   599→                  </div>
+   600→
+   601→                  {/* Info */}
+   602→                  <div className="min-w-0 flex-1">
+   603→                    <div className="flex items-center gap-2">
+   604→                      <h3 className="truncate text-sm font-semibold">{item.title}</h3>
+   605→                      {item.isCombo && (
+   606→                        <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 text-[10px] px-1.5 py-0">
+   607→                          COMBO
+   608→                        </Badge>
+   609→                      )}
+   610→                    </div>
+   611→                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+   612→                      <span>{item.category}</span>
+   613→                      <span>&#8226;</span>
+   614→                      <span>{item.testCount} tests</span>
+   615→                      <span>&#8226;</span>
+   616→                      <span>Sort #{item.sortOrder}</span>
+   617→                    </div>
+   618→                    {/* Mobile: Price & Status row */}
+   619→                    <div className="flex items-center gap-3 mt-2 sm:hidden">
+   620→                      <div className="text-sm font-bold">
+   621→                        ₹{item.price.toLocaleString()}
+   622→                      </div>
+   623→                      {item.mrp > item.price && (
+   624→                        <div className="text-xs text-muted-foreground line-through">
+   625→                          ₹{item.mrp.toLocaleString()}
+   626→                        </div>
+   627→                      )}
+   628→                      {item.mrp > item.price && (
+   629→                        <span className="text-[10px] font-medium text-emerald-600">
+   630→                          {discount(item.price, item.mrp)}% off
+   631→                        </span>
+   632→                      )}
+   633→                      <Badge
+   634→                        className={
+   635→                          item.status === 'published'
+   636→                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+   637→                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+   638→                        }
+   639→                      >
+   640→                        {item.status === 'published' ? 'Published' : 'Draft'}
+   641→                      </Badge>
+   642→                    </div>
+   643→                  </div>
+   644→
+   645→                  {/* Desktop: Price */}
+   646→                  <div className="hidden sm:block flex-shrink-0 text-right">
+   647→                    <div className="text-sm font-bold">
+   648→                      ₹{item.price.toLocaleString()}
+   649→                    </div>
+   650→                    {item.mrp > item.price && (
+   651→                      <div className="text-xs text-muted-foreground line-through">
+   652→                        ₹{item.mrp.toLocaleString()}
+   653→                      </div>
+   654→                    )}
+   655→                    {item.mrp > item.price && (
+   656→                      <span className="text-[10px] font-medium text-emerald-600">
+   657→                        {discount(item.price, item.mrp)}% off
+   658→                      </span>
+   659→                    )}
+   660→                  </div>
+   661→
+   662→                  {/* Desktop: Status */}
+   663→                  <div className="hidden sm:block flex-shrink-0">
+   664→                    <Badge
+   665→                      className={
+   666→                        item.status === 'published'
+   667→                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+   668→                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+   669→                      }
+   670→                    >
+   671→                      {item.status === 'published' ? 'Published' : 'Draft'}
+   672→                    </Badge>
+   673→                  </div>
+   674→
+   675→                  {/* Actions */}
+   676→                  <div className="flex-shrink-0 self-start sm:self-center">
+   677→                    <DropdownMenu>
+   678→                      <DropdownMenuTrigger asChild>
+   679→                        <Button variant="ghost" size="icon" className="h-8 w-8">
+   680→                          <MoreHorizontal className="h-4 w-4" />
+   681→                          <span className="sr-only">Open menu</span>
+   682→                        </Button>
+   683→                      </DropdownMenuTrigger>
+   684→                      <DropdownMenuContent align="end" className="w-48">
+   685→                        <DropdownMenuItem onClick={() => openEditDrawer(item)}>
+   686→                          <Pencil className="mr-2 h-4 w-4" />
+   687→                          Edit
+   688→                        </DropdownMenuItem>
+   689→                        <DropdownMenuItem>
+   690→                          <Eye className="mr-2 h-4 w-4" />
+   691→                          View Tests
+   692→                        </DropdownMenuItem>
+   693→                        <DropdownMenuItem>
+   694→                          <Copy className="mr-2 h-4 w-4" />
+   695→                          Duplicate
+   696→                        </DropdownMenuItem>
+   697→                        <DropdownMenuSeparator />
+   698→                        <DropdownMenuItem
+   699→                          variant="destructive"
+   700→                          onClick={() => {
+   701→                            setSeriesToDelete(item)
+   702→                            setDeleteDialogOpen(true)
+   703→                          }}
+   704→                        >
+   705→                          <Trash2 className="mr-2 h-4 w-4" />
+   706→                          Delete
+   707→                        </DropdownMenuItem>
+   708→                      </DropdownMenuContent>
+   709→                    </DropdownMenu>
+   710→                  </div>
+   711→                </div>
+   712→              </CardContent>
+   713→            </Card>
+   714→          ))}
+   715→        </div>
+   716→      ) : (
+   717→        /* Grid view */
+   718→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   719→          {series.map((item) => (
+   720→            <Card key={item.id} className="overflow-hidden rounded-xl">
+   721→              {/* Thumbnail area */}
+   722→              <div
+   723→                className={`flex h-32 items-center justify-center ${
+   724→                  categoryColors[item.category] || 'bg-slate-500'
+   725→                }`}
+   726→              >
+   727→                <span className="text-4xl font-bold text-white">{(item.category || '?').charAt(0)}</span>
+   728→              </div>
+   729→              <CardContent className="p-4">
+   730→                <div className="flex items-start justify-between gap-2">
+   731→                  <div className="min-w-0 flex-1">
+   732→                    <div className="flex items-center gap-2">
+   733→                      <h3 className="truncate text-sm font-semibold">{item.title}</h3>
+   734→                      {item.isCombo && (
+   735→                        <Badge className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 text-[10px] px-1.5 py-0 flex-shrink-0">
+   736→                          COMBO
+   737→                        </Badge>
+   738→                      )}
+   739→                    </div>
+   740→                    <p className="mt-1 text-xs text-muted-foreground">
+   741→                      {item.category} &bull; {item.testCount} tests &bull; Sort #{item.sortOrder}
+   742→                    </p>
+   743→                  </div>
+   744→                </div>
+   745→
+   746→                <div className="mt-3 flex items-center justify-between">
+   747→                  <div>
+   748→                    <span className="text-sm font-bold">₹{item.price.toLocaleString()}</span>
+   749→                    {item.mrp > item.price && (
+   750→                      <span className="ml-1.5 text-xs text-muted-foreground line-through">
+   751→                        ₹{item.mrp.toLocaleString()}
+   752→                      </span>
+   753→                    )}
+   754→                    {item.mrp > item.price && (
+   755→                      <span className="ml-1.5 text-[10px] font-medium text-emerald-600">
+   756→                        {discount(item.price, item.mrp)}% off
+   757→                      </span>
+   758→                    )}
+   759→                  </div>
+   760→                  <Badge
+   761→                    className={
+   762→                      item.status === 'published'
+   763→                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+   764→                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+   765→                    }
+   766→                  >
+   767→                    {item.status === 'published' ? 'Published' : 'Draft'}
+   768→                  </Badge>
+   769→                </div>
+   770→
+   771→                <div className="mt-3 flex items-center gap-1">
+   772→                  <Button
+   773→                    variant="outline"
+   774→                    size="sm"
+   775→                    className="h-7 flex-1 text-xs"
+   776→                    onClick={() => openEditDrawer(item)}
+   777→                  >
+   778→                    <Pencil className="mr-1 h-3 w-3" />
+   779→                    Edit
+   780→                  </Button>
+   781→                  <Button variant="outline" size="sm" className="h-7 flex-1 text-xs">
+   782→                    <Eye className="mr-1 h-3 w-3" />
+   783→                    Tests
+   784→                  </Button>
+   785→                  <DropdownMenu>
+   786→                    <DropdownMenuTrigger asChild>
+   787→                      <Button variant="outline" size="icon" className="h-7 w-7">
+   788→                        <MoreHorizontal className="h-3 w-3" />
+   789→                      </Button>
+   790→                    </DropdownMenuTrigger>
+   791→                    <DropdownMenuContent align="end" className="w-40">
+   792→                      <DropdownMenuItem>
+   793→                        <Copy className="mr-2 h-4 w-4" />
+   794→                        Duplicate
+   795→                      </DropdownMenuItem>
+   796→                      <DropdownMenuSeparator />
+   797→                      <DropdownMenuItem
+   798→                        variant="destructive"
+   799→                        onClick={() => {
+   800→                          setSeriesToDelete(item)
+   801→                          setDeleteDialogOpen(true)
+   802→                        }}
+   803→                      >
+   804→                        <Trash2 className="mr-2 h-4 w-4" />
+   805→                        Delete
+   806→                      </DropdownMenuItem>
+   807→                    </DropdownMenuContent>
+   808→                  </DropdownMenu>
+   809→                </div>
+   810→              </CardContent>
+   811→            </Card>
+   812→          ))}
+   813→        </div>
+   814→      )}
+   815→
+   816→      {/* ── Pagination ─────────────────────────────────────────────────── */}
+   817→      {totalPages > 1 && (
+   818→        <div className="flex justify-center">
+   819→          <Pagination>
+   820→            <PaginationContent>
+   821→              <PaginationItem>
+   822→                <PaginationPrevious
+   823→                  onClick={() => setCurrentPageNum(Math.max(1, currentPageNum - 1))}
+   824→                  className={currentPageNum === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   825→                />
+   826→              </PaginationItem>
+   827→              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+   828→                <PaginationItem key={page}>
+   829→                  <PaginationLink
+   830→                    isActive={page === currentPageNum}
+   831→                    onClick={() => setCurrentPageNum(page)}
+   832→                    className="cursor-pointer"
+   833→                  >
+   834→                    {page}
+   835→                  </PaginationLink>
+   836→                </PaginationItem>
+   837→              ))}
+   838→              <PaginationItem>
+   839→                <PaginationNext
+   840→                  onClick={() => setCurrentPageNum(Math.min(totalPages, currentPageNum + 1))}
+   841→                  className={currentPageNum === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+   842→                />
+   843→              </PaginationItem>
+   844→            </PaginationContent>
+   845→          </Pagination>
+   846→        </div>
+   847→      )}
+   848→
+   849→      {/* ── Add / Edit Test Series Drawer ─────────────────────────────────── */}
+   850→      <Sheet open={drawerOpen} onOpenChange={(open) => {
+   851→        if (!open) resetForm()
+   852→        setDrawerOpen(open)
+   853→      }}>
+   854→        <SheetContent
+   855→          side="right"
+   856→          className="sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full overflow-y-auto p-0"
+   857→        >
+   858→          <SheetHeader className="border-b px-6 py-4">
+   859→            <SheetTitle className="text-lg">
+   860→              {editingId ? 'Edit Test Series' : 'Add Test Series'}
+   861→            </SheetTitle>
+   862→            <SheetDescription>
+   863→              {editingId
+   864→                ? 'Update the test series details below.'
+   865→                : 'Create a new test series for your students.'}
+   866→            </SheetDescription>
+   867→          </SheetHeader>
+   868→
+   869→          <Tabs
+   870→            value={activeTab}
+   871→            onValueChange={setActiveTab}
+   872→            className="flex flex-1 flex-col"
+   873→          >
+   874→            <div className="border-b px-6">
+   875→              <TabsList className="h-10 w-full justify-start rounded-none border-0 bg-transparent p-0">
+   876→                <TabsTrigger
+   877→                  value="basic"
+   878→                  className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+   879→                >
+   880→                  Basic
+   881→                </TabsTrigger>
+   882→                <TabsTrigger
+   883→                  value="advanced"
+   884→                  className="relative rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+   885→                >
+   886→                  Advanced
+   887→                </TabsTrigger>
+   888→              </TabsList>
+   889→            </div>
+   890→
+   891→            {/* ── Basic Tab ──────────────────────────────────────────────── */}
+   892→            <TabsContent value="basic" className="flex-1 overflow-y-auto px-6 py-5">
+   893→              <div className="space-y-5">
+   894→                {/* Upload Image */}
+   895→                <div className="space-y-2">
+   896→                  <Label>Thumbnail</Label>
+   897→                  <div
+   898→                    className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 px-4 py-8 transition-colors hover:border-muted-foreground/40 hover:bg-muted/50"
+   899→                    onClick={() => {
+   900→                      // Simulate image upload
+   901→                      updateField('imagePreview', 'uploaded')
+   902→                    }}
+   903→                  >
+   904→                    {formData.imagePreview ? (
+   905→                      <div className="flex flex-col items-center gap-2">
+   906→                        <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-emerald-100">
+   907→                          <ImagePlus className="h-8 w-8 text-emerald-600" />
+   908→                        </div>
+   909→                        <span className="text-xs text-emerald-600 font-medium">Image uploaded</span>
+   910→                        <Button
+   911→                          type="button"
+   912→                          variant="ghost"
+   913→                          size="sm"
+   914→                          className="text-xs text-destructive"
+   915→                          onClick={(e) => {
+   916→                            e.stopPropagation()
+   917→                            updateField('imagePreview', null)
+   918→                          }}
+   919→                        >
+   920→                          Remove
+   921→                        </Button>
+   922→                      </div>
+   923→                    ) : (
+   924→                      <>
+   925→                        <Upload className="h-8 w-8 text-muted-foreground/40" />
+   926→                        <p className="mt-2 text-sm text-muted-foreground">
+   927→                          Click to upload image
+   928→                        </p>
+   929→                        <p className="text-[11px] text-muted-foreground/60">
+   930→                          Recommended: 400&times;300px
+   931→                        </p>
+   932→                      </>
+   933→                    )}
+   934→                  </div>
+   935→                </div>
+   936→
+   937→                {/* Title */}
+   938→                <div className="space-y-2">
+   939→                  <Label htmlFor="ts-title">
+   940→                    Title <span className="text-destructive">*</span>
+   941→                  </Label>
+   942→                  <Input
+   943→                    id="ts-title"
+   944→                    placeholder="Enter test series title"
+   945→                    value={formData.title}
+   946→                    onChange={(e) => updateField('title', e.target.value)}
+   947→                  />
+   948→                </div>
+   949→
+   950→                {/* Description */}
+   951→                <div className="space-y-2">
+   952→                  <Label htmlFor="ts-description">Description</Label>
+   953→                  <Textarea
+   954→                    id="ts-description"
+   955→                    placeholder="Describe this test series..."
+   956→                    rows={4}
+   957→                    value={formData.description}
+   958→                    onChange={(e) => updateField('description', e.target.value)}
+   959→                  />
+   960→                </div>
+   961→
+   962→                {/* Category/Exam */}
+   963→                <div className="space-y-2">
+   964→                  <Label>Category / Exam</Label>
+   965→                  <Select
+   966→                    value={formData.category}
+   967→                    onValueChange={(v) => updateField('category', v)}
+   968→                  >
+   969→                    <SelectTrigger>
+   970→                      <SelectValue placeholder="Select category" />
+   971→                    </SelectTrigger>
+   972→                    <SelectContent>
+   973→                      {categories.length > 0
+   974→                        ? categories.map((c) => (
+   975→                            <SelectItem key={c.id} value={c.name}>
+   976→                              {c.name}
+   977→                            </SelectItem>
+   978→                          ))
+   979→                        : ['JEE', 'NEET', 'CUET', 'GATE', 'UPSC', 'CAT', 'Other'].map((c) => (
+   980→                            <SelectItem key={c} value={c}>
+   981→                              {c}
+   982→                            </SelectItem>
+   983→                          ))
+   984→                      }
+   985→                    </SelectContent>
+   986→                  </Select>
+   987→                </div>
+   988→
+   989→                {/* Price row */}
+   990→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   991→                  <div className="space-y-2">
+   992→                    <Label htmlFor="ts-price">Selling Price (₹)</Label>
+   993→                    <Input
+   994→                      id="ts-price"
+   995→                      type="number"
+   996→                      placeholder="0"
+   997→                      value={formData.price}
+   998→                      onChange={(e) => updateField('price', e.target.value)}
+   999→                    />
+  1000→                  </div>
+  1001→                  <div className="space-y-2">
+  1002→                    <Label htmlFor="ts-mrp">MRP (₹)</Label>
+  1003→                    <Input
+  1004→                      id="ts-mrp"
+  1005→                      type="number"
+  1006→                      placeholder="0"
+  1007→                      value={formData.mrp}
+  1008→                      onChange={(e) => updateField('mrp', e.target.value)}
+  1009→                    />
+  1010→                  </div>
+  1011→                </div>
+  1012→
+  1013→                {/* Sort Order + Status */}
+  1014→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1015→                  <div className="space-y-2">
+  1016→                    <Label htmlFor="ts-sort-order">Sort Order</Label>
+  1017→                    <Input
+  1018→                      id="ts-sort-order"
+  1019→                      type="number"
+  1020→                      placeholder="0"
+  1021→                      value={formData.sortOrder}
+  1022→                      onChange={(e) => updateField('sortOrder', e.target.value)}
+  1023→                    />
+  1024→                  </div>
+  1025→                  <div className="space-y-2">
+  1026→                    <Label>Status</Label>
+  1027→                    <Select
+  1028→                      value={formData.status}
+  1029→                      onValueChange={(v) => updateField('status', v as 'published' | 'draft')}
+  1030→                    >
+  1031→                      <SelectTrigger>
+  1032→                        <SelectValue />
+  1033→                      </SelectTrigger>
+  1034→                      <SelectContent>
+  1035→                        <SelectItem value="draft">Draft</SelectItem>
+  1036→                        <SelectItem value="published">Published</SelectItem>
+  1037→                      </SelectContent>
+  1038→                    </Select>
+  1039→                  </div>
+  1040→                </div>
+  1041→
+  1042→                <Separator />
+  1043→
+  1044→                {/* Validity Mode */}
+  1045→                <div className="space-y-3">
+  1046→                  <Label>Validity Mode</Label>
+  1047→                  <RadioGroup
+  1048→                    value={formData.validityMode}
+  1049→                    onValueChange={(v) =>
+  1050→                      updateField('validityMode', v as FormData['validityMode'])
+  1051→                    }
+  1052→                    className="flex flex-col gap-2 sm:flex-row sm:gap-4"
+  1053→                  >
+  1054→                    <div className="flex items-center space-x-2">
+  1055→                      <RadioGroupItem value="days" id="validity-days" />
+  1056→                      <Label htmlFor="validity-days" className="text-sm font-normal">
+  1057→                        Validity Days
+  1058→                      </Label>
+  1059→                    </div>
+  1060→                    <div className="flex items-center space-x-2">
+  1061→                      <RadioGroupItem value="date" id="validity-date" />
+  1062→                      <Label htmlFor="validity-date" className="text-sm font-normal">
+  1063→                        End Date
+  1064→                      </Label>
+  1065→                    </div>
+  1066→                    <div className="flex items-center space-x-2">
+  1067→                      <RadioGroupItem value="lifetime" id="validity-lifetime" />
+  1068→                      <Label htmlFor="validity-lifetime" className="text-sm font-normal">
+  1069→                        Lifetime Access
+  1070→                      </Label>
+  1071→                    </div>
+  1072→                  </RadioGroup>
+  1073→
+  1074→                  {formData.validityMode === 'days' && (
+  1075→                    <div className="space-y-2">
+  1076→                      <Label htmlFor="ts-validity-days">Validity (Days)</Label>
+  1077→                      <Input
+  1078→                        id="ts-validity-days"
+  1079→                        type="number"
+  1080→                        placeholder="e.g. 365"
+  1081→                        value={formData.validityDays}
+  1082→                        onChange={(e) => updateField('validityDays', e.target.value)}
+  1083→                      />
+  1084→                    </div>
+  1085→                  )}
+  1086→
+  1087→                  {formData.validityMode === 'date' && (
+  1088→                    <div className="space-y-2">
+  1089→                      <Label htmlFor="ts-validity-date">End Date</Label>
+  1090→                      <Input
+  1091→                        id="ts-validity-date"
+  1092→                        type="date"
+  1093→                        value={formData.validityDate}
+  1094→                        onChange={(e) => updateField('validityDate', e.target.value)}
+  1095→                      />
+  1096→                    </div>
+  1097→                  )}
+  1098→                </div>
+  1099→              </div>
+  1100→            </TabsContent>
+  1101→
+  1102→            {/* ── Advanced Tab ───────────────────────────────────────────── */}
+  1103→            <TabsContent value="advanced" className="flex-1 overflow-y-auto px-6 py-5">
+  1104→              <div className="space-y-5">
+  1105→                {/* Enable Combo */}
+  1106→                <div className="flex items-center justify-between rounded-lg border p-4">
+  1107→                  <div className="space-y-0.5">
+  1108→                    <Label className="text-sm">Enable Combo</Label>
+  1109→                    <p className="text-xs text-muted-foreground">
+  1110→                      Bundle multiple tests into this series
+  1111→                    </p>
+  1112→                  </div>
+  1113→                  <Switch
+  1114→                    checked={formData.isCombo}
+  1115→                    onCheckedChange={(v) => updateField('isCombo', v)}
+  1116→                  />
+  1117→                </div>
+  1118→
+  1119→                {formData.isCombo && (
+  1120→                  <div className="space-y-2">
+  1121→                    <Label>Select Tests to Include</Label>
+  1122→                    <div className="max-h-48 overflow-y-auto rounded-lg border p-2 space-y-1">
+  1123→                      {loadingTests ? (
+  1124→                        <div className="p-2 space-y-2">
+  1125→                          <Skeleton className="h-5 w-full" />
+  1126→                          <Skeleton className="h-5 w-3/4" />
+  1127→                          <Skeleton className="h-5 w-1/2" />
+  1128→                        </div>
+  1129→                      ) : testOptions.length === 0 ? (
+  1130→                        <div className="p-2 text-sm text-muted-foreground">No tests available</div>
+  1131→                      ) : (
+  1132→                        testOptions.map((test) => (
+  1133→                          <label
+  1134→                            key={test.id}
+  1135→                            className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 cursor-pointer"
+  1136→                          >
+  1137→                            <input
+  1138→                              type="checkbox"
+  1139→                              className="rounded border-muted-foreground/30"
+  1140→                              checked={formData.selectedTests.includes(test.id)}
+  1141→                              onChange={(e) => {
+  1142→                                if (e.target.checked) {
+  1143→                                  updateField('selectedTests', [
+  1144→                                    ...formData.selectedTests,
+  1145→                                    test.id,
+  1146→                                  ])
+  1147→                                } else {
+  1148→                                  updateField(
+  1149→                                    'selectedTests',
+  1150→                                    formData.selectedTests.filter((t) => t !== test.id)
+  1151→                                  )
+  1152→                                }
+  1153→                              }}
+  1154→                            />
+  1155→                            <span className="text-sm">{test.title}</span>
+  1156→                          </label>
+  1157→                        ))
+  1158→                      )}
+  1159→                    </div>
+  1160→                    {formData.selectedTests.length > 0 && (
+  1161→                      <p className="text-xs text-muted-foreground">
+  1162→                        {formData.selectedTests.length} test(s) selected
+  1163→                      </p>
+  1164→                    )}
+  1165→                  </div>
+  1166→                )}
+  1167→
+  1168→                {/* Include in Test Maker */}
+  1169→                <div className="flex items-center justify-between rounded-lg border p-4">
+  1170→                  <div className="space-y-0.5">
+  1171→                    <Label className="text-sm">Include in Test Maker</Label>
+  1172→                    <p className="text-xs text-muted-foreground">
+  1173→                      Allow students to create custom tests from this series
+  1174→                    </p>
+  1175→                  </div>
+  1176→                  <Switch
+  1177→                    checked={formData.includeTestMaker}
+  1178→                    onCheckedChange={(v) => updateField('includeTestMaker', v)}
+  1179→                  />
+  1180→                </div>
+  1181→
+  1182→                {/* Allow Payment */}
+  1183→                <div className="flex items-center justify-between rounded-lg border p-4">
+  1184→                  <div className="space-y-0.5">
+  1185→                    <Label className="text-sm">Allow Payment</Label>
+  1186→                    <p className="text-xs text-muted-foreground">
+  1187→                      Enable paid access for this test series
+  1188→                    </p>
+  1189→                  </div>
+  1190→                  <Switch
+  1191→                    checked={formData.allowPayment}
+  1192→                    onCheckedChange={(v) => updateField('allowPayment', v)}
+  1193→                  />
+  1194→                </div>
+  1195→
+  1196→                <Separator />
+  1197→
+  1198→                {/* SEO Section */}
+  1199→                <div className="space-y-1">
+  1200→                  <h3 className="text-sm font-semibold">SEO Settings</h3>
+  1201→                  <p className="text-xs text-muted-foreground">
+  1202→                    Optimize how this series appears in search engines
+  1203→                  </p>
+  1204→                </div>
+  1205→
+  1206→                <div className="space-y-2">
+  1207→                  <Label htmlFor="ts-seo-title">SEO Meta Title</Label>
+  1208→                  <Input
+  1209→                    id="ts-seo-title"
+  1210→                    placeholder="Enter meta title for SEO"
+  1211→                    value={formData.seoTitle}
+  1212→                    onChange={(e) => updateField('seoTitle', e.target.value)}
+  1213→                  />
+  1214→                </div>
+  1215→
+  1216→                <div className="space-y-2">
+  1217→                  <Label htmlFor="ts-seo-desc">SEO Meta Description</Label>
+  1218→                  <Textarea
+  1219→                    id="ts-seo-desc"
+  1220→                    placeholder="Enter meta description for SEO"
+  1221→                    rows={3}
+  1222→                    value={formData.seoDescription}
+  1223→                    onChange={(e) => updateField('seoDescription', e.target.value)}
+  1224→                  />
+  1225→                </div>
+  1226→
+  1227→                {/* Enable Rich Snippets */}
+  1228→                <div className="flex items-center justify-between rounded-lg border p-4">
+  1229→                  <div className="space-y-0.5">
+  1230→                    <Label className="text-sm">Enable Rich Snippets</Label>
+  1231→                    <p className="text-xs text-muted-foreground">
+  1232→                      Add structured data for better search appearance
+  1233→                    </p>
+  1234→                  </div>
+  1235→                  <Switch
+  1236→                    checked={formData.richSnippets}
+  1237→                    onCheckedChange={(v) => updateField('richSnippets', v)}
+  1238→                  />
+  1239→                </div>
+  1240→              </div>
+  1241→            </TabsContent>
+  1242→          </Tabs>
+  1243→
+  1244→          {/* Sticky bottom bar */}
+  1245→          <div className="border-t bg-white px-6 py-4 flex items-center justify-end gap-3 mt-auto">
+  1246→            <Button
+  1247→              variant="outline"
+  1248→              onClick={() => {
+  1249→                setDrawerOpen(false)
+  1250→                resetForm()
+  1251→              }}
+  1252→              disabled={saving}
+  1253→            >
+  1254→              Cancel
+  1255→            </Button>
+  1256→            <Button onClick={handleSubmit} disabled={saving}>
+  1257→              {saving ? 'Saving...' : editingId ? 'Update Test Series' : 'Save Test Series'}
+  1258→            </Button>
+  1259→          </div>
+  1260→        </SheetContent>
+  1261→      </Sheet>
+  1262→
+  1263→      {/* ── Delete confirmation dialog ─────────────────────────────────── */}
+  1264→      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+  1265→        <DialogContent>
+  1266→          <DialogHeader>
+  1267→            <DialogTitle>Delete Test Series</DialogTitle>
+  1268→            <DialogDescription>
+  1269→              Are you sure you want to delete{' '}
+  1270→              <span className="font-semibold text-foreground">
+  1271→                {seriesToDelete?.title}
+  1272→              </span>
+  1273→              ? This action cannot be undone.
+  1274→            </DialogDescription>
+  1275→          </DialogHeader>
+  1276→          <DialogFooter>
+  1277→            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+  1278→              Cancel
+  1279→            </Button>
+  1280→            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+  1281→              {deleting ? 'Deleting...' : 'Delete'}
+  1282→            </Button>
+  1283→          </DialogFooter>
+  1284→        </DialogContent>
+  1285→      </Dialog>
+  1286→    </div>
+  1287→  )
+  1288→}
+  1289→

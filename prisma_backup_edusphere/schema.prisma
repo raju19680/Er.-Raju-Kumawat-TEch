@@ -1,0 +1,280 @@
+// EduSphere - Education SaaS Platform Schema
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  username       String   @unique
+  password       String
+  name           String?
+  role           Role     @default(STUDENT)
+  phone          String?
+  avatar         String?
+  bio            String?
+  
+  // Teacher-specific fields
+  organisationId String?  // Unique organisation ID for teachers
+  websiteSlug    String?  // Unique slug for teacher's public website
+  teacherStatus  TeacherStatus @default(NONE)
+  
+  // Relations
+  coursesTaught       Course[]       @relation("TeacherCourses")
+  testSeriesCreated   TestSeries[]   @relation("TeacherTestSeries")
+  notesCreated        Notes[]        @relation("TeacherNotes")
+  enrollments         Enrollment[]
+  testAttempts        TestAttempt[]
+  notesPurchases      NotesPurchase[]
+  testSeriesPurchases TestSeriesPurchase[]
+  payments            Payment[]
+  
+  // Teacher's students (teacher who teaches this student)
+  teacherId           String?
+  teacher             User?          @relation("TeacherStudents", fields: [teacherId], references: [id])
+  students            User[]         @relation("TeacherStudents")
+  
+  // Announcements created by this user
+  announcementsCreated Announcement[] @relation("AnnouncementCreator")
+  // Announcements for this teacher
+  teacherAnnouncements Announcement[] @relation("TeacherAnnouncements")
+  // Certificates earned
+  certificates        Certificate[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  price       Float    @default(0)
+  thumbnail   String?
+  category    String?
+  level       String   @default("Beginner")
+  language    String   @default("English")
+  duration    Int      @default(0) // in minutes
+  isPublished Boolean  @default(false)
+  teacherId   String
+  teacher     User     @relation("TeacherCourses", fields: [teacherId], references: [id])
+  lessons     Lesson[]
+  enrollments Enrollment[]
+  certificates Certificate[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  videoUrl    String?
+  duration    Int      @default(0) // in minutes
+  order       Int      @default(0)
+  isPreview   Boolean  @default(false)
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TestSeries {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  price       Float    @default(0)
+  category    String?
+  totalTests  Int      @default(0)
+  isPublished Boolean  @default(false)
+  teacherId   String
+  teacher     User     @relation("TeacherTestSeries", fields: [teacherId], references: [id])
+  tests       Test[]
+  purchases   TestSeriesPurchase[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Test {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  duration      Int      @default(60) // in minutes
+  totalMarks    Int      @default(100)
+  passingMarks  Int      @default(40)
+  order         Int      @default(0)
+  testSeriesId  String
+  testSeries    TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+  questions     Question[]
+  attempts      TestAttempt[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  text          String
+  options       String   // JSON array of options
+  correctAnswer Int      // index of correct option
+  explanation   String?
+  marks         Int      @default(1)
+  testId        String
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+}
+
+model Notes {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  content     String
+  fileUrl     String?
+  price       Float    @default(0)
+  category    String?
+  subject     String?
+  isPublished Boolean  @default(false)
+  teacherId   String
+  teacher     User     @relation("TeacherNotes", fields: [teacherId], references: [id])
+  purchases   NotesPurchase[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Enrollment {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress   Float    @default(0) // percentage 0-100
+  completedLessons String @default("[]") // JSON array of lesson IDs
+  enrolledAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@unique([userId, courseId])
+}
+
+model TestAttempt {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testId       String
+  test         Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers      String   @default("[]") // JSON array of selected option indices
+  score        Float    @default(0)
+  totalMarks   Int      @default(0)
+  percentage   Float    @default(0)
+  passed       Boolean  @default(false)
+  timeTaken    Int      @default(0) // in seconds
+  attemptedAt  DateTime @default(now())
+}
+
+model NotesPurchase {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notesId    String
+  notes      Notes    @relation(fields: [notesId], references: [id], onDelete: Cascade)
+  purchasedAt DateTime @default(now())
+  
+  @@unique([userId, notesId])
+}
+
+model TestSeriesPurchase {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testSeriesId String
+  testSeries   TestSeries @relation(fields: [testSeriesId], references: [id], onDelete: Cascade)
+  purchasedAt  DateTime @default(now())
+  
+  @@unique([userId, testSeriesId])
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  type        PaymentType
+  itemId      String   // course/testSeries/notes ID
+  itemName    String
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  type        AnnouncementType @default(GENERAL)
+  targetType  TargetType @default(ALL)
+  // For teacher announcements, link to teacher
+  teacherId   String?
+  teacher     User?    @relation("TeacherAnnouncements", fields: [teacherId], references: [id], onDelete: Cascade)
+  isPinned    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdBy   String
+  creator     User     @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  certificateNumber String @unique
+  issuedAt    DateTime @default(now())
+  
+  @@unique([userId, courseId])
+}
+
+enum AnnouncementType {
+  GENERAL
+  MAINTENANCE
+  FEATURE
+  URGENT
+  ACHIEVEMENT
+}
+
+enum TargetType {
+  ALL
+  TEACHERS
+  STUDENTS
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum TeacherStatus {
+  NONE
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum PaymentType {
+  COURSE
+  TEST_SERIES
+  NOTES
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}

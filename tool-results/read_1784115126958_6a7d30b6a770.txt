@@ -1,0 +1,1058 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react'
+     4→import {
+     5→  Card,
+     6→  CardContent,
+     7→} from '@/components/ui/card'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Input } from '@/components/ui/input'
+    10→import { Label } from '@/components/ui/label'
+    11→import { Badge } from '@/components/ui/badge'
+    12→import { Textarea } from '@/components/ui/textarea'
+    13→import { Skeleton } from '@/components/ui/skeleton'
+    14→import { Switch } from '@/components/ui/switch'
+    15→import {
+    16→  Sheet,
+    17→  SheetContent,
+    18→  SheetHeader,
+    19→  SheetTitle,
+    20→  SheetDescription,
+    21→  SheetFooter,
+    22→} from '@/components/ui/sheet'
+    23→import {
+    24→  Select,
+    25→  SelectContent,
+    26→  SelectItem,
+    27→  SelectTrigger,
+    28→  SelectValue,
+    29→} from '@/components/ui/select'
+    30→import {
+    31→  Dialog,
+    32→  DialogContent,
+    33→  DialogHeader,
+    34→  DialogTitle,
+    35→  DialogDescription,
+    36→  DialogFooter,
+    37→} from '@/components/ui/dialog'
+    38→import { Separator } from '@/components/ui/separator'
+    39→import {
+    40→  Table,
+    41→  TableBody,
+    42→  TableCell,
+    43→  TableHead,
+    44→  TableHeader,
+    45→  TableRow,
+    46→} from '@/components/ui/table'
+    47→import {
+    48→  Search,
+    49→  Plus,
+    50→  Package,
+    51→  MoreHorizontal,
+    52→  Pencil,
+    53→  Trash2,
+    54→  Eye,
+    55→  EyeOff,
+    56→  IndianRupee,
+    57→  Upload,
+    58→  Loader2,
+    59→  ChevronLeft,
+    60→  ChevronRight,
+    61→  AlertCircle,
+    62→  RefreshCw,
+    63→  Copy,
+    64→  Share2,
+    65→  Star,
+    66→  BookOpen,
+    67→  FileText,
+    68→  GraduationCap,
+    69→  ClipboardList,
+    70→  File,
+    71→  Filter,
+    72→} from 'lucide-react'
+    73→import {
+    74→  DropdownMenu,
+    75→  DropdownMenuContent,
+    76→  DropdownMenuItem,
+    77→  DropdownMenuSeparator,
+    78→  DropdownMenuTrigger,
+    79→} from '@/components/ui/dropdown-menu'
+    80→import { apiFetch } from '@/lib/api-client'
+    81→import { useAppStore } from '@/lib/store'
+    82→import { toast } from 'sonner'
+    83→
+    84→// ─── Types ────────────────────────────────────────────────────────────────
+    85→
+    86→interface DigitalProduct {
+    87→  id: string
+    88→  title: string
+    89→  description: string | null
+    90→  thumbnail: string | null
+    91→  file: string | null
+    92→  type: string
+    93→  category: string | null
+    94→  price: number
+    95→  mrp: number
+    96→  status: string
+    97→  featured: boolean
+    98→  organizationId: string
+    99→  createdAt: string
+   100→  updatedAt: string
+   101→}
+   102→
+   103→interface Category {
+   104→  id: string
+   105→  name: string
+   106→  [key: string]: unknown
+   107→}
+   108→
+   109→const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+   110→  published: { label: 'Published', color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50' },
+   111→  draft: { label: 'Draft', color: 'bg-amber-50 text-amber-700 hover:bg-amber-50' },
+   112→  archived: { label: 'Archived', color: 'bg-gray-100 text-gray-500 hover:bg-gray-100' },
+   113→}
+   114→
+   115→const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+   116→  course: { label: 'Course', icon: GraduationCap, color: 'bg-violet-50 text-violet-700' },
+   117→  ebook: { label: 'E-Book', icon: BookOpen, color: 'bg-sky-50 text-sky-700' },
+   118→  notes: { label: 'Notes', icon: FileText, color: 'bg-teal-50 text-teal-700' },
+   119→  test_series: { label: 'Test Series', icon: ClipboardList, color: 'bg-orange-50 text-orange-700' },
+   120→  other: { label: 'Other', icon: File, color: 'bg-gray-50 text-gray-700' },
+   121→}
+   122→
+   123→const CATEGORY_COLORS: Record<string, string> = {
+   124→  JEE: 'bg-rose-50 text-rose-700',
+   125→  NEET: 'bg-rose-50 text-rose-700',
+   126→  UPSC: 'bg-purple-50 text-purple-700',
+   127→  GATE: 'bg-orange-50 text-orange-700',
+   128→  CAT: 'bg-teal-50 text-teal-700',
+   129→  CUET: 'bg-cyan-50 text-cyan-700',
+   130→  General: 'bg-gray-50 text-gray-700',
+   131→}
+   132→const DEFAULT_CATEGORY_COLOR = 'bg-gray-50 text-gray-700'
+   133→
+   134→// ─── Component ────────────────────────────────────────────────────────────
+   135→
+   136→export default function DigitalProductsList() {
+   137→  const { orgCode } = useAppStore()
+   138→
+   139→  // Data state
+   140→  const [products, setProducts] = useState<DigitalProduct[]>([])
+   141→  const [categories, setCategories] = useState<Category[]>([])
+   142→  const [total, setTotal] = useState(0)
+   143→  const [totalPages, setTotalPages] = useState(1)
+   144→
+   145→  // UI state
+   146→  const [loading, setLoading] = useState(true)
+   147→  const [error, setError] = useState<string | null>(null)
+   148→  const [search, setSearch] = useState('')
+   149→  const [searchDebounced, setSearchDebounced] = useState('')
+   150→  const [statusFilter, setStatusFilter] = useState<string>('all')
+   151→  const [typeFilter, setTypeFilter] = useState<string>('all')
+   152→  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+   153→  const [page, setPage] = useState(1)
+   154→  const limit = 20
+   155→
+   156→  // Drawer state
+   157→  const [drawerOpen, setDrawerOpen] = useState(false)
+   158→  const [editProduct, setEditProduct] = useState<DigitalProduct | null>(null)
+   159→  const [saving, setSaving] = useState(false)
+   160→
+   161→  // Delete dialog state
+   162→  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+   163→  const [productToDelete, setProductToDelete] = useState<DigitalProduct | null>(null)
+   164→  const [deleting, setDeleting] = useState(false)
+   165→
+   166→  // Duplicate dialog state
+   167→  const [duplicating, setDuplicating] = useState(false)
+   168→
+   169→  // Form state
+   170→  const [formTitle, setFormTitle] = useState('')
+   171→  const [formDescription, setFormDescription] = useState('')
+   172→  const [formThumbnail, setFormThumbnail] = useState('')
+   173→  const [formFile, setFormFile] = useState('')
+   174→  const [formType, setFormType] = useState('course')
+   175→  const [formCategory, setFormCategory] = useState('')
+   176→  const [formPrice, setFormPrice] = useState('')
+   177→  const [formMrp, setFormMrp] = useState('')
+   178→  const [formStatus, setFormStatus] = useState<string>('draft')
+   179→  const [formFeatured, setFormFeatured] = useState(false)
+   180→
+   181→  // ─── Debounced search ─────────────────────────────────────────────────
+   182→
+   183→  useEffect(() => {
+   184→    const timer = setTimeout(() => {
+   185→      setSearchDebounced(search)
+   186→      setPage(1)
+   187→    }, 400)
+   188→    return () => clearTimeout(timer)
+   189→  }, [search])
+   190→
+   191→  // ─── Fetch products ──────────────────────────────────────────────────
+   192→
+   193→  const fetchProducts = useCallback(async () => {
+   194→    setLoading(true)
+   195→    setError(null)
+   196→    try {
+   197→      const params = new URLSearchParams({
+   198→        page: page.toString(),
+   199→        limit: limit.toString(),
+   200→        organizationId: orgCode || '',
+   201→      })
+   202→      if (searchDebounced) params.set('search', searchDebounced)
+   203→      if (statusFilter !== 'all') params.set('status', statusFilter)
+   204→      if (typeFilter !== 'all') params.set('type', typeFilter)
+   205→      if (categoryFilter !== 'all') params.set('category', categoryFilter)
+   206→
+   207→      const res = await apiFetch(`/api/digital-products?${params}`)
+   208→      if (!res.ok) throw new Error('Failed to fetch products')
+   209→      const data = await res.json()
+   210→      setProducts(data.items || [])
+   211→      setTotal(data.total || 0)
+   212→      setTotalPages(Math.ceil((data.total || 0) / limit) || 1)
+   213→    } catch (err) {
+   214→      console.error('Failed to fetch digital products:', err)
+   215→      setError('Failed to load products. Please try again.')
+   216→    } finally {
+   217→      setLoading(false)
+   218→    }
+   219→  }, [page, searchDebounced, statusFilter, typeFilter, categoryFilter, orgCode])
+   220→
+   221→  // ─── Fetch categories ─────────────────────────────────────────────────
+   222→
+   223→  const fetchCategories = useCallback(async () => {
+   224→    try {
+   225→      const params = new URLSearchParams({ organizationId: orgCode || '' })
+   226→      const res = await apiFetch(`/api/categories?${params}`)
+   227→      if (!res.ok) throw new Error('Failed to fetch categories')
+   228→      const data = await res.json()
+   229→      setCategories(data.items || [])
+   230→    } catch (err) {
+   231→      console.error('Failed to fetch categories:', err)
+   232→    }
+   233→  }, [orgCode])
+   234→
+   235→  // ─── Effects ──────────────────────────────────────────────────────────
+   236→
+   237→  useEffect(() => {
+   238→    fetchProducts()
+   239→  }, [fetchProducts])
+   240→
+   241→  useEffect(() => {
+   242→    fetchCategories()
+   243→  }, [fetchCategories])
+   244→
+   245→  useEffect(() => {
+   246→    setPage(1)
+   247→  }, [statusFilter, typeFilter, categoryFilter])
+   248→
+   249→  // ─── Form helpers ─────────────────────────────────────────────────────
+   250→
+   251→  const resetForm = () => {
+   252→    setFormTitle('')
+   253→    setFormDescription('')
+   254→    setFormThumbnail('')
+   255→    setFormFile('')
+   256→    setFormType('course')
+   257→    setFormCategory('')
+   258→    setFormPrice('')
+   259→    setFormMrp('')
+   260→    setFormStatus('draft')
+   261→    setFormFeatured(false)
+   262→  }
+   263→
+   264→  const openAddDrawer = () => {
+   265→    setEditProduct(null)
+   266→    resetForm()
+   267→    setDrawerOpen(true)
+   268→  }
+   269→
+   270→  const openEditDrawer = (product: DigitalProduct) => {
+   271→    setEditProduct(product)
+   272→    setFormTitle(product.title)
+   273→    setFormDescription(product.description || '')
+   274→    setFormThumbnail(product.thumbnail || '')
+   275→    setFormFile(product.file || '')
+   276→    setFormType(product.type)
+   277→    setFormCategory(product.category || '')
+   278→    setFormPrice(String(product.price))
+   279→    setFormMrp(String(product.mrp))
+   280→    setFormStatus(product.status)
+   281→    setFormFeatured(product.featured)
+   282→    setDrawerOpen(true)
+   283→  }
+   284→
+   285→  // ─── Save (Create / Update) ───────────────────────────────────────────
+   286→
+   287→  const handleSave = async () => {
+   288→    if (!formTitle.trim()) {
+   289→      toast.error('Title is required')
+   290→      return
+   291→    }
+   292→
+   293→    setSaving(true)
+   294→    try {
+   295→      const body: Record<string, unknown> = {
+   296→        title: formTitle.trim(),
+   297→        description: formDescription.trim(),
+   298→        thumbnail: formThumbnail.trim(),
+   299→        file: formFile.trim(),
+   300→        type: formType,
+   301→        category: formCategory,
+   302→        price: Number(formPrice) || 0,
+   303→        mrp: Number(formMrp) || 0,
+   304→        status: formStatus,
+   305→        featured: formFeatured,
+   306→        organizationId: orgCode,
+   307→      }
+   308→
+   309→      if (editProduct) {
+   310→        const res = await apiFetch(`/api/digital-products/${editProduct.id}`, {
+   311→          method: 'PUT',
+   312→          body: JSON.stringify(body),
+   313→        })
+   314→        if (!res.ok) {
+   315→          const data = await res.json()
+   316→          throw new Error(data.error || 'Failed to update product')
+   317→        }
+   318→        toast.success('Product updated successfully')
+   319→      } else {
+   320→        const res = await apiFetch('/api/digital-products', {
+   321→          method: 'POST',
+   322→          body: JSON.stringify(body),
+   323→        })
+   324→        if (!res.ok) {
+   325→          const data = await res.json()
+   326→          throw new Error(data.error || 'Failed to create product')
+   327→        }
+   328→        toast.success('Product created successfully')
+   329→      }
+   330→
+   331→      setDrawerOpen(false)
+   332→      fetchProducts()
+   333→    } catch (err: any) {
+   334→      console.error('Save failed:', err)
+   335→      toast.error(err.message || (editProduct ? 'Failed to update product' : 'Failed to create product'))
+   336→    } finally {
+   337→      setSaving(false)
+   338→    }
+   339→  }
+   340→
+   341→  // ─── Delete ───────────────────────────────────────────────────────────
+   342→
+   343→  const handleDelete = async () => {
+   344→    if (!productToDelete) return
+   345→    setDeleting(true)
+   346→    try {
+   347→      const res = await apiFetch(`/api/digital-products/${productToDelete.id}`, {
+   348→        method: 'DELETE',
+   349→      })
+   350→      if (!res.ok) throw new Error('Failed to delete product')
+   351→      toast.success('Product deleted successfully')
+   352→      setDeleteDialogOpen(false)
+   353→      setProductToDelete(null)
+   354→      fetchProducts()
+   355→    } catch (err) {
+   356→      console.error('Delete failed:', err)
+   357→      toast.error('Failed to delete product')
+   358→    } finally {
+   359→      setDeleting(false)
+   360→    }
+   361→  }
+   362→
+   363→  // ─── Toggle publish/draft ─────────────────────────────────────────────
+   364→
+   365→  const handleTogglePublish = async (product: DigitalProduct) => {
+   366→    const newStatus = product.status === 'published' ? 'draft' : 'published'
+   367→    try {
+   368→      const res = await apiFetch(`/api/digital-products/${product.id}`, {
+   369→        method: 'PUT',
+   370→        body: JSON.stringify({ status: newStatus }),
+   371→      })
+   372→      if (!res.ok) throw new Error('Failed to update status')
+   373→      toast.success(newStatus === 'published' ? 'Product published' : 'Product moved to draft')
+   374→      fetchProducts()
+   375→    } catch (err) {
+   376→      console.error('Toggle publish failed:', err)
+   377→      toast.error('Failed to update product status')
+   378→    }
+   379→  }
+   380→
+   381→  // ─── Toggle featured ──────────────────────────────────────────────────
+   382→
+   383→  const handleToggleFeatured = async (product: DigitalProduct) => {
+   384→    try {
+   385→      const res = await apiFetch(`/api/digital-products/${product.id}`, {
+   386→        method: 'PUT',
+   387→        body: JSON.stringify({ featured: !product.featured }),
+   388→      })
+   389→      if (!res.ok) throw new Error('Failed to update featured status')
+   390→      toast.success(product.featured ? 'Removed from featured' : 'Marked as featured')
+   391→      fetchProducts()
+   392→    } catch (err) {
+   393→      console.error('Toggle featured failed:', err)
+   394→      toast.error('Failed to update featured status')
+   395→    }
+   396→  }
+   397→
+   398→  // ─── Duplicate ────────────────────────────────────────────────────────
+   399→
+   400→  const handleDuplicate = async (product: DigitalProduct) => {
+   401→    setDuplicating(true)
+   402→    try {
+   403→      const res = await apiFetch('/api/digital-products', {
+   404→        method: 'POST',
+   405→        body: JSON.stringify({
+   406→          title: `${product.title} (Copy)`,
+   407→          description: product.description,
+   408→          thumbnail: product.thumbnail,
+   409→          file: product.file,
+   410→          type: product.type,
+   411→          category: product.category,
+   412→          price: product.price,
+   413→          mrp: product.mrp,
+   414→          status: 'draft',
+   415→          featured: false,
+   416→          organizationId: orgCode,
+   417→        }),
+   418→      })
+   419→      if (!res.ok) throw new Error('Failed to duplicate product')
+   420→      toast.success('Product duplicated')
+   421→      fetchProducts()
+   422→    } catch (err) {
+   423→      console.error('Duplicate failed:', err)
+   424→      toast.error('Failed to duplicate product')
+   425→    } finally {
+   426→      setDuplicating(false)
+   427→    }
+   428→  }
+   429→
+   430→  // ─── Share ────────────────────────────────────────────────────────────
+   431→
+   432→  const handleShare = (product: DigitalProduct) => {
+   433→    const shareUrl = `${window.location.origin}/product/${product.id}`
+   434→    navigator.clipboard.writeText(shareUrl).then(() => {
+   435→      toast.success('Share link copied to clipboard')
+   436→    }).catch(() => {
+   437→      toast.error('Failed to copy link')
+   438→    })
+   439→  }
+   440→
+   441→  // ─── Discount calculator ──────────────────────────────────────────────
+   442→
+   443→  const discount = (price: number, mrp: number) => {
+   444→    if (mrp === 0) return 0
+   445→    return Math.round(((mrp - price) / mrp) * 100)
+   446→  }
+   447→
+   448→  // ─── Render helpers ──────────────────────────────────────────────────
+   449→
+   450→  const getTypeIcon = (type: string) => {
+   451→    return TYPE_CONFIG[type]?.icon || File
+   452→  }
+   453→
+   454→  const getTypeLabel = (type: string) => {
+   455→    return TYPE_CONFIG[type]?.label || 'Other'
+   456→  }
+   457→
+   458→  // ─── Loading Skeletons ────────────────────────────────────────────────
+   459→
+   460→  const renderSkeletons = () => (
+   461→    <Card className="rounded-xl">
+   462→      <CardContent className="p-0">
+   463→        <Table>
+   464→          <TableHeader>
+   465→            <TableRow>
+   466→              <TableHead className="w-12">S.No</TableHead>
+   467→              <TableHead>Product Name</TableHead>
+   468→              <TableHead className="w-28">Type</TableHead>
+   469→              <TableHead className="w-28">Category</TableHead>
+   470→              <TableHead className="w-24">Price</TableHead>
+   471→              <TableHead className="w-24">Status</TableHead>
+   472→              <TableHead className="w-16">Actions</TableHead>
+   473→            </TableRow>
+   474→          </TableHeader>
+   475→          <TableBody>
+   476→            {Array.from({ length: 5 }).map((_, i) => (
+   477→              <TableRow key={i}>
+   478→                <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+   479→                <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+   480→                <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+   481→                <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+   482→                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+   483→                <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+   484→                <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
+   485→              </TableRow>
+   486→            ))}
+   487→          </TableBody>
+   488→        </Table>
+   489→      </CardContent>
+   490→    </Card>
+   491→  )
+   492→
+   493→  // ─── Render ───────────────────────────────────────────────────────────
+   494→
+   495→  return (
+   496→    <div className="space-y-6">
+   497→      {/* Header */}
+   498→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   499→        <div>
+   500→          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Digital Products</h1>
+   501→          <p className="text-sm text-muted-foreground mt-1">
+   502→            Manage your digital offerings — courses, e-books, notes & more
+   503→          </p>
+   504→        </div>
+   505→        <Button onClick={openAddDrawer} className="w-full sm:w-auto bg-black hover:bg-gray-800 text-white">
+   506→          <Plus className="size-4 mr-2" />
+   507→          Add Product
+   508→        </Button>
+   509→      </div>
+   510→
+   511→      {/* Filters Row */}
+   512→      <Card className="rounded-xl">
+   513→        <CardContent className="p-4">
+   514→          <div className="flex flex-col sm:flex-row gap-3">
+   515→            <div className="relative flex-1">
+   516→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   517→              <Input
+   518→                placeholder="Search products..."
+   519→                value={search}
+   520→                onChange={(e) => setSearch(e.target.value)}
+   521→                className="pl-9 rounded-lg"
+   522→              />
+   523→            </div>
+   524→            <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1) }}>
+   525→              <SelectTrigger className="w-full sm:w-[150px] rounded-lg">
+   526→                <SelectValue placeholder="Status" />
+   527→              </SelectTrigger>
+   528→              <SelectContent>
+   529→                <SelectItem value="all">All Status</SelectItem>
+   530→                <SelectItem value="published">Published</SelectItem>
+   531→                <SelectItem value="draft">Draft</SelectItem>
+   532→                <SelectItem value="archived">Archived</SelectItem>
+   533→              </SelectContent>
+   534→            </Select>
+   535→            <Select value={typeFilter} onValueChange={(val) => { setTypeFilter(val); setPage(1) }}>
+   536→              <SelectTrigger className="w-full sm:w-[150px] rounded-lg">
+   537→                <SelectValue placeholder="Type" />
+   538→              </SelectTrigger>
+   539→              <SelectContent>
+   540→                <SelectItem value="all">All Types</SelectItem>
+   541→                <SelectItem value="course">Course</SelectItem>
+   542→                <SelectItem value="ebook">E-Book</SelectItem>
+   543→                <SelectItem value="notes">Notes</SelectItem>
+   544→                <SelectItem value="test_series">Test Series</SelectItem>
+   545→                <SelectItem value="other">Other</SelectItem>
+   546→              </SelectContent>
+   547→            </Select>
+   548→            <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setPage(1) }}>
+   549→              <SelectTrigger className="w-full sm:w-[150px] rounded-lg">
+   550→                <SelectValue placeholder="Category" />
+   551→              </SelectTrigger>
+   552→              <SelectContent>
+   553→                <SelectItem value="all">All Categories</SelectItem>
+   554→                {categories.map((cat) => (
+   555→                  <SelectItem key={cat.id} value={cat.name}>
+   556→                    {cat.name}
+   557→                  </SelectItem>
+   558→                ))}
+   559→              </SelectContent>
+   560→            </Select>
+   561→          </div>
+   562→        </CardContent>
+   563→      </Card>
+   564→
+   565→      {/* Stats Bar */}
+   566→      {!loading && !error && (
+   567→        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+   568→          <span>{total} product{total !== 1 ? 's' : ''} total</span>
+   569→          {totalPages > 1 && (
+   570→            <>
+   571→              <span>•</span>
+   572→              <span>Page {page} of {totalPages}</span>
+   573→            </>
+   574→          )}
+   575→        </div>
+   576→      )}
+   577→
+   578→      {/* Error State */}
+   579→      {error && !loading && (
+   580→        <Card className="rounded-xl">
+   581→          <CardContent className="py-16">
+   582→            <div className="flex flex-col items-center justify-center text-center">
+   583→              <div className="size-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
+   584→                <AlertCircle className="size-5 text-red-500" />
+   585→              </div>
+   586→              <p className="text-sm font-medium text-gray-900">{error}</p>
+   587→              <Button
+   588→                variant="outline"
+   589→                size="sm"
+   590→                className="mt-4"
+   591→                onClick={fetchProducts}
+   592→              >
+   593→                <RefreshCw className="size-4 mr-2" />
+   594→                Retry
+   595→              </Button>
+   596→            </div>
+   597→          </CardContent>
+   598→        </Card>
+   599→      )}
+   600→
+   601→      {/* Loading Skeletons */}
+   602→      {loading && renderSkeletons()}
+   603→
+   604→      {/* Empty State */}
+   605→      {!loading && !error && products.length === 0 ? (
+   606→        <Card className="rounded-xl">
+   607→          <CardContent className="py-16">
+   608→            <div className="flex flex-col items-center justify-center text-center">
+   609→              <div className="size-12 rounded-full bg-muted flex items-center justify-center mb-4">
+   610→                <Package className="size-5 text-muted-foreground" />
+   611→              </div>
+   612→              <p className="text-sm font-medium text-gray-900">No products found</p>
+   613→              <p className="text-xs text-muted-foreground mt-1">
+   614→                {search || statusFilter !== 'all' || typeFilter !== 'all' || categoryFilter !== 'all'
+   615→                  ? 'Try adjusting your search or filter criteria'
+   616→                  : 'Create your first digital product to get started'}
+   617→              </p>
+   618→              {!search && statusFilter === 'all' && typeFilter === 'all' && categoryFilter === 'all' && (
+   619→                <Button
+   620→                  onClick={openAddDrawer}
+   621→                  className="mt-4 bg-black hover:bg-gray-800 text-white"
+   622→                  size="sm"
+   623→                >
+   624→                  <Plus className="size-4 mr-2" />
+   625→                  Add Product
+   626→                </Button>
+   627→              )}
+   628→            </div>
+   629→          </CardContent>
+   630→        </Card>
+   631→      ) : !loading && !error ? (
+   632→        /* Products Table */
+   633→        <Card className="rounded-xl overflow-hidden">
+   634→          <CardContent className="p-0">
+   635→            <div className="overflow-x-auto">
+   636→              <Table>
+   637→                <TableHeader>
+   638→                  <TableRow className="bg-gray-50/80">
+   639→                    <TableHead className="w-14 text-center font-semibold">S.No</TableHead>
+   640→                    <TableHead className="font-semibold min-w-[240px]">Product Name</TableHead>
+   641→                    <TableHead className="w-28 font-semibold">Type</TableHead>
+   642→                    <TableHead className="w-28 font-semibold">Category</TableHead>
+   643→                    <TableHead className="w-28 font-semibold text-right">Price</TableHead>
+   644→                    <TableHead className="w-28 font-semibold">Status</TableHead>
+   645→                    <TableHead className="w-20 text-center font-semibold">Actions</TableHead>
+   646→                  </TableRow>
+   647→                </TableHeader>
+   648→                <TableBody>
+   649→                  {products.map((product, index) => {
+   650→                    const TypeIcon = getTypeIcon(product.type)
+   651→                    const disc = discount(product.price, product.mrp)
+   652→                    const statusCfg = STATUS_CONFIG[product.status] || STATUS_CONFIG.draft
+   653→
+   654→                    return (
+   655→                      <TableRow key={product.id} className="hover:bg-gray-50/50 group">
+   656→                        <TableCell className="text-center text-muted-foreground text-sm">
+   657→                          {(page - 1) * limit + index + 1}
+   658→                        </TableCell>
+   659→                        <TableCell>
+   660→                          <div className="flex items-center gap-3">
+   661→                            {/* Thumbnail */}
+   662→                            <div className="size-10 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0 overflow-hidden border">
+   663→                              {product.thumbnail ? (
+   664→                                <img
+   665→                                  src={product.thumbnail}
+   666→                                  alt={product.title}
+   667→                                  className="h-full w-full object-cover"
+   668→                                />
+   669→                              ) : (
+   670→                                <TypeIcon className="size-4 text-gray-400" />
+   671→                              )}
+   672→                            </div>
+   673→                            <div className="min-w-0">
+   674→                              <div className="flex items-center gap-1.5">
+   675→                                <span className="font-medium text-sm text-gray-900 truncate block max-w-[200px]">
+   676→                                  {product.title}
+   677→                                </span>
+   678→                                {product.featured && (
+   679→                                  <Star className="size-3.5 text-amber-500 fill-amber-500 shrink-0" />
+   680→                                )}
+   681→                              </div>
+   682→                              {product.description && (
+   683→                                <p className="text-xs text-muted-foreground truncate max-w-[220px]">
+   684→                                  {product.description}
+   685→                                </p>
+   686→                              )}
+   687→                            </div>
+   688→                          </div>
+   689→                        </TableCell>
+   690→                        <TableCell>
+   691→                          <Badge variant="secondary" className={TYPE_CONFIG[product.type]?.color || TYPE_CONFIG.other.color}>
+   692→                            <TypeIcon className="size-3 mr-1" />
+   693→                            {getTypeLabel(product.type)}
+   694→                          </Badge>
+   695→                        </TableCell>
+   696→                        <TableCell>
+   697→                          {product.category ? (
+   698→                            <Badge variant="secondary" className={CATEGORY_COLORS[product.category] || DEFAULT_CATEGORY_COLOR}>
+   699→                              {product.category}
+   700→                            </Badge>
+   701→                          ) : (
+   702→                            <span className="text-xs text-muted-foreground">—</span>
+   703→                          )}
+   704→                        </TableCell>
+   705→                        <TableCell className="text-right">
+   706→                          <div className="flex flex-col items-end">
+   707→                            <span className="font-semibold text-sm text-gray-900 flex items-center">
+   708→                              <IndianRupee className="size-3" />
+   709→                              {product.price.toLocaleString('en-IN')}
+   710→                            </span>
+   711→                            {product.mrp > product.price && (
+   712→                              <span className="text-xs text-muted-foreground line-through">
+   713→                                ₹{product.mrp.toLocaleString('en-IN')}
+   714→                              </span>
+   715→                            )}
+   716→                            {disc > 0 && (
+   717→                              <span className="text-xs text-emerald-600 font-medium">{disc}% OFF</span>
+   718→                            )}
+   719→                          </div>
+   720→                        </TableCell>
+   721→                        <TableCell>
+   722→                          <Badge className={statusCfg.color}>
+   723→                            {statusCfg.label}
+   724→                          </Badge>
+   725→                        </TableCell>
+   726→                        <TableCell className="text-center">
+   727→                          <DropdownMenu>
+   728→                            <DropdownMenuTrigger asChild>
+   729→                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
+   730→                                <MoreHorizontal className="size-4" />
+   731→                              </Button>
+   732→                            </DropdownMenuTrigger>
+   733→                            <DropdownMenuContent align="end" className="w-48">
+   734→                              <DropdownMenuItem onClick={() => openEditDrawer(product)}>
+   735→                                <Pencil className="size-4 mr-2" />
+   736→                                Edit
+   737→                              </DropdownMenuItem>
+   738→                              <DropdownMenuItem onClick={() => handleTogglePublish(product)}>
+   739→                                {product.status === 'published' ? (
+   740→                                  <>
+   741→                                    <EyeOff className="size-4 mr-2" />
+   742→                                    Unpublish
+   743→                                  </>
+   744→                                ) : (
+   745→                                  <>
+   746→                                    <Eye className="size-4 mr-2" />
+   747→                                    Publish
+   748→                                  </>
+   749→                                )}
+   750→                              </DropdownMenuItem>
+   751→                              <DropdownMenuItem onClick={() => handleToggleFeatured(product)}>
+   752→                                <Star className={`size-4 mr-2 ${product.featured ? 'text-amber-500 fill-amber-500' : ''}`} />
+   753→                                {product.featured ? 'Remove Featured' : 'Mark Featured'}
+   754→                              </DropdownMenuItem>
+   755→                              <DropdownMenuItem onClick={() => handleDuplicate(product)} disabled={duplicating}>
+   756→                                <Copy className="size-4 mr-2" />
+   757→                                Duplicate
+   758→                              </DropdownMenuItem>
+   759→                              <DropdownMenuItem onClick={() => handleShare(product)}>
+   760→                                <Share2 className="size-4 mr-2" />
+   761→                                Share Link
+   762→                              </DropdownMenuItem>
+   763→                              <DropdownMenuSeparator />
+   764→                              <DropdownMenuItem
+   765→                                className="text-red-600 focus:text-red-600"
+   766→                                onClick={() => {
+   767→                                  setProductToDelete(product)
+   768→                                  setDeleteDialogOpen(true)
+   769→                                }}
+   770→                              >
+   771→                                <Trash2 className="size-4 mr-2" />
+   772→                                Delete
+   773→                              </DropdownMenuItem>
+   774→                            </DropdownMenuContent>
+   775→                          </DropdownMenu>
+   776→                        </TableCell>
+   777→                      </TableRow>
+   778→                    )
+   779→                  })}
+   780→                </TableBody>
+   781→              </Table>
+   782→            </div>
+   783→
+   784→            {/* Pagination */}
+   785→            {totalPages > 1 && (
+   786→              <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50">
+   787→                <span className="text-xs text-muted-foreground">
+   788→                  Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, total)} of {total} entries
+   789→                </span>
+   790→                <div className="flex items-center gap-2">
+   791→                  <Button
+   792→                    variant="outline"
+   793→                    size="sm"
+   794→                    disabled={page <= 1}
+   795→                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+   796→                    className="h-8"
+   797→                  >
+   798→                    <ChevronLeft className="size-4" />
+   799→                    Previous
+   800→                  </Button>
+   801→                  <Button
+   802→                    variant="outline"
+   803→                    size="sm"
+   804→                    disabled={page >= totalPages}
+   805→                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+   806→                    className="h-8"
+   807→                  >
+   808→                    Next
+   809→                    <ChevronRight className="size-4" />
+   810→                  </Button>
+   811→                </div>
+   812→              </div>
+   813→            )}
+   814→          </CardContent>
+   815→        </Card>
+   816→      ) : null}
+   817→
+   818→      {/* Add/Edit Product Drawer */}
+   819→      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+   820→        <SheetContent side="right" className="sm:max-w-md md:max-w-lg overflow-y-auto">
+   821→          <SheetHeader>
+   822→            <SheetTitle>{editProduct ? 'Edit Product' : 'Add New Product'}</SheetTitle>
+   823→            <SheetDescription>
+   824→              {editProduct
+   825→                ? 'Update product details below'
+   826→                : 'Fill in the details to create a new digital product'}
+   827→            </SheetDescription>
+   828→          </SheetHeader>
+   829→
+   830→          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-5">
+   831→            {/* Title */}
+   832→            <div className="space-y-2">
+   833→              <Label htmlFor="product-title">Title *</Label>
+   834→              <Input
+   835→                id="product-title"
+   836→                placeholder="Enter product title"
+   837→                value={formTitle}
+   838→                onChange={(e) => setFormTitle(e.target.value)}
+   839→              />
+   840→            </div>
+   841→
+   842→            {/* Type & Category */}
+   843→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   844→              <div className="space-y-2">
+   845→                <Label htmlFor="product-type">Product Type</Label>
+   846→                <Select value={formType} onValueChange={setFormType}>
+   847→                  <SelectTrigger id="product-type">
+   848→                    <SelectValue placeholder="Select type" />
+   849→                  </SelectTrigger>
+   850→                  <SelectContent>
+   851→                    <SelectItem value="course">Course</SelectItem>
+   852→                    <SelectItem value="ebook">E-Book</SelectItem>
+   853→                    <SelectItem value="notes">Notes</SelectItem>
+   854→                    <SelectItem value="test_series">Test Series</SelectItem>
+   855→                    <SelectItem value="other">Other</SelectItem>
+   856→                  </SelectContent>
+   857→                </Select>
+   858→              </div>
+   859→              <div className="space-y-2">
+   860→                <Label htmlFor="product-category">Category</Label>
+   861→                <Select value={formCategory} onValueChange={setFormCategory}>
+   862→                  <SelectTrigger id="product-category">
+   863→                    <SelectValue placeholder="Select category" />
+   864→                  </SelectTrigger>
+   865→                  <SelectContent>
+   866→                    {categories.map((cat) => (
+   867→                      <SelectItem key={cat.id} value={cat.name}>
+   868→                        {cat.name}
+   869→                      </SelectItem>
+   870→                    ))}
+   871→                  </SelectContent>
+   872→                </Select>
+   873→              </div>
+   874→            </div>
+   875→
+   876→            {/* Description */}
+   877→            <div className="space-y-2">
+   878→              <Label htmlFor="product-desc">Description</Label>
+   879→              <Textarea
+   880→                id="product-desc"
+   881→                placeholder="Brief description of the product..."
+   882→                value={formDescription}
+   883→                onChange={(e) => setFormDescription(e.target.value)}
+   884→                className="min-h-[80px] resize-y"
+   885→              />
+   886→            </div>
+   887→
+   888→            {/* Thumbnail */}
+   889→            <div className="space-y-2">
+   890→              <Label htmlFor="product-thumbnail">Thumbnail URL</Label>
+   891→              <Input
+   892→                id="product-thumbnail"
+   893→                placeholder="https://example.com/image.jpg"
+   894→                value={formThumbnail}
+   895→                onChange={(e) => setFormThumbnail(e.target.value)}
+   896→              />
+   897→              {formThumbnail ? (
+   898→                <div className="mt-2 h-28 rounded-lg overflow-hidden border bg-gray-50">
+   899→                  <img
+   900→                    src={formThumbnail}
+   901→                    alt="Thumbnail preview"
+   902→                    className="h-full w-full object-cover"
+   903→                    onError={(e) => {
+   904→                      (e.target as HTMLImageElement).style.display = 'none'
+   905→                    }}
+   906→                  />
+   907→                </div>
+   908→              ) : (
+   909→                <div className="mt-2 h-28 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-2">
+   910→                  <Upload className="size-6 text-gray-400" />
+   911→                  <span className="text-xs text-gray-500">Enter a thumbnail URL above</span>
+   912→                </div>
+   913→              )}
+   914→            </div>
+   915→
+   916→            {/* File URL */}
+   917→            <div className="space-y-2">
+   918→              <Label htmlFor="product-file">File / Content URL</Label>
+   919→              <Input
+   920→                id="product-file"
+   921→                placeholder="https://example.com/file.pdf"
+   922→                value={formFile}
+   923→                onChange={(e) => setFormFile(e.target.value)}
+   924→              />
+   925→              <p className="text-xs text-muted-foreground">URL to the downloadable file or course content</p>
+   926→            </div>
+   927→
+   928→            <Separator />
+   929→
+   930→            {/* Pricing */}
+   931→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   932→              <div className="space-y-2">
+   933→                <Label htmlFor="product-price">Selling Price (₹)</Label>
+   934→                <Input
+   935→                  id="product-price"
+   936→                  type="number"
+   937→                  placeholder="0"
+   938→                  value={formPrice}
+   939→                  onChange={(e) => setFormPrice(e.target.value)}
+   940→                  min="0"
+   941→                />
+   942→                <p className="text-xs text-muted-foreground">This is the final price student will pay</p>
+   943→              </div>
+   944→              <div className="space-y-2">
+   945→                <Label htmlFor="product-mrp">MRP (₹)</Label>
+   946→                <Input
+   947→                  id="product-mrp"
+   948→                  type="number"
+   949→                  placeholder="0"
+   950→                  value={formMrp}
+   951→                  onChange={(e) => setFormMrp(e.target.value)}
+   952→                  min="0"
+   953→                />
+   954→              </div>
+   955→            </div>
+   956→
+   957→            {/* Price Preview */}
+   958→            {Number(formPrice) > 0 && Number(formMrp) > Number(formPrice) && (
+   959→              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2">
+   960→                <span className="text-sm text-emerald-700">
+   961→                  💰 Students see: <strong>₹{Number(formPrice).toLocaleString('en-IN')}</strong>
+   962→                  <span className="line-through text-muted-foreground ml-1">₹{Number(formMrp).toLocaleString('en-IN')}</span>
+   963→                  <Badge className="ml-2 bg-emerald-600 text-white hover:bg-emerald-600 text-xs">
+   964→                    {discount(Number(formPrice), Number(formMrp))}% OFF
+   965→                  </Badge>
+   966→                </span>
+   967→              </div>
+   968→            )}
+   969→
+   970→            <Separator />
+   971→
+   972→            {/* Status & Featured */}
+   973→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   974→              <div className="space-y-2">
+   975→                <Label htmlFor="product-status">Status</Label>
+   976→                <Select value={formStatus} onValueChange={setFormStatus}>
+   977→                  <SelectTrigger id="product-status">
+   978→                    <SelectValue placeholder="Select" />
+   979→                  </SelectTrigger>
+   980→                  <SelectContent>
+   981→                    <SelectItem value="published">Published</SelectItem>
+   982→                    <SelectItem value="draft">Draft</SelectItem>
+   983→                    <SelectItem value="archived">Archived</SelectItem>
+   984→                  </SelectContent>
+   985→                </Select>
+   986→              </div>
+   987→              <div className="space-y-2">
+   988→                <Label htmlFor="product-featured">Featured Product</Label>
+   989→                <div className="flex items-center gap-3 pt-1">
+   990→                  <Switch
+   991→                    id="product-featured"
+   992→                    checked={formFeatured}
+   993→                    onCheckedChange={setFormFeatured}
+   994→                  />
+   995→                  <span className="text-sm text-muted-foreground">
+   996→                    {formFeatured ? 'Yes, feature this product' : 'No'}
+   997→                  </span>
+   998→                </div>
+   999→              </div>
+  1000→            </div>
+  1001→          </div>
+  1002→
+  1003→          <SheetFooter className="border-t pt-4">
+  1004→            <div className="flex gap-3 w-full">
+  1005→              <Button variant="outline" className="flex-1" onClick={() => setDrawerOpen(false)} disabled={saving}>
+  1006→                Cancel
+  1007→              </Button>
+  1008→              <Button
+  1009→                className="flex-1 bg-black hover:bg-gray-800 text-white"
+  1010→                onClick={handleSave}
+  1011→                disabled={saving}
+  1012→              >
+  1013→                {saving ? (
+  1014→                  <>
+  1015→                    <Loader2 className="size-4 mr-2 animate-spin" />
+  1016→                    {editProduct ? 'Saving...' : 'Creating...'}
+  1017→                  </>
+  1018→                ) : (
+  1019→                  editProduct ? 'Save Changes' : 'Create Product'
+  1020→                )}
+  1021→              </Button>
+  1022→            </div>
+  1023→          </SheetFooter>
+  1024→        </SheetContent>
+  1025→      </Sheet>
+  1026→
+  1027→      {/* Delete Confirmation Dialog */}
+  1028→      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+  1029→        <DialogContent>
+  1030→          <DialogHeader>
+  1031→            <DialogTitle>Delete Product</DialogTitle>
+  1032→            <DialogDescription>
+  1033→              Are you sure you want to delete{' '}
+  1034→              <span className="font-semibold text-foreground">{productToDelete?.title}</span>? This
+  1035→              action cannot be undone.
+  1036→            </DialogDescription>
+  1037→          </DialogHeader>
+  1038→          <DialogFooter>
+  1039→            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+  1040→              Cancel
+  1041→            </Button>
+  1042→            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+  1043→              {deleting ? (
+  1044→                <>
+  1045→                  <Loader2 className="size-4 mr-2 animate-spin" />
+  1046→                  Deleting...
+  1047→                </>
+  1048→              ) : (
+  1049→                'Delete'
+  1050→              )}
+  1051→            </Button>
+  1052→          </DialogFooter>
+  1053→        </DialogContent>
+  1054→      </Dialog>
+  1055→    </div>
+  1056→  )
+  1057→}
+  1058→

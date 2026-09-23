@@ -1,0 +1,1539 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback } from 'react'
+     4→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     5→import { Badge } from '@/components/ui/badge'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Skeleton } from '@/components/ui/skeleton'
+    11→import { Separator } from '@/components/ui/separator'
+    12→import { Switch } from '@/components/ui/switch'
+    13→import { ScrollArea } from '@/components/ui/scroll-area'
+    14→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    15→import {
+    16→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    17→} from '@/components/ui/table'
+    18→import {
+    19→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+    20→} from '@/components/ui/dialog'
+    21→import {
+    22→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    23→} from '@/components/ui/select'
+    24→import {
+    25→  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    26→  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+    27→} from '@/components/ui/alert-dialog'
+    28→import {
+    29→  Palette, Globe, Smartphone, Download, Search, Building2, Users,
+    30→  Loader2, CheckCircle2, RefreshCw, AlertCircle, Shield, Trash2,
+    31→  ExternalLink, Lock, Unlock, Code2, FileArchive, Clock, Hammer,
+    32→  Monitor, Eye, Save, Plus, ArrowDownToLine, Info, Link2,
+    33→} from 'lucide-react'
+    34→import { motion, AnimatePresence } from 'framer-motion'
+    35→import { apiFetch } from '@/lib/api-client'
+    36→import { toast } from 'sonner'
+    37→
+    38→// ── Types ─────────────────────────────────────────────────────────────────────
+    39→interface TeacherData {
+    40→  id: string
+    41→  name: string
+    42→  email: string
+    43→  phone: string | null
+    44→  avatar: string | null
+    45→  organization: {
+    46→    id: string
+    47→    name: string
+    48→    code: string
+    49→    accentColor: string
+    50→    status: string
+    51→  } | null
+    52→  studentCount: number
+    53→  createdAt: string
+    54→}
+    55→
+    56→interface WhiteLabelConfig {
+    57→  id: string
+    58→  teacherId: string
+    59→  orgName: string
+    60→  logo: string | null
+    61→  favicon: string | null
+    62→  primaryColor: string
+    63→  secondaryColor: string | null
+    64→  accentColor: string
+    65→  fontFamily: string
+    66→  customCSS: string | null
+    67→  heroTitle: string | null
+    68→  heroSubtitle: string | null
+    69→  heroImage: string | null
+    70→  footerText: string | null
+    71→  socialLinks: string | null
+    72→  seoTitle: string | null
+    73→  seoDescription: string | null
+    74→  pwaEnabled: boolean
+    75→  analyticsId: string | null
+    76→  facebookPixelId: string | null
+    77→  templateId: string
+    78→  publishedAt: string | null
+    79→  createdAt: string
+    80→  updatedAt: string
+    81→}
+    82→
+    83→interface BuildRecordData {
+    84→  id: string
+    85→  teacherId: string
+    86→  teacherName: string | null
+    87→  organizationId: string
+    88→  orgCode: string | null
+    89→  type: string
+    90→  status: string
+    91→  filename: string | null
+    92→  fileSize: number | null
+    93→  version: string
+    94→  changelog: string | null
+    95→  downloadUrl: string | null
+    96→  triggeredBy: string | null
+    97→  triggeredByName: string | null
+    98→  startedAt: string | null
+    99→  completedAt: string | null
+   100→  error: string | null
+   101→  createdAt: string
+   102→}
+   103→
+   104→interface CustomDomainData {
+   105→  id: string
+   106→  teacherId: string
+   107→  domain: string
+   108→  isVerified: boolean
+   109→  sslEnabled: boolean
+   110→  dnsVerifiedAt: string | null
+   111→  sslProvisionedAt: string | null
+   112→  status: string
+   113→  targetType: string
+   114→  organizationId: string
+   115→  createdAt: string
+   116→  updatedAt: string
+   117→}
+   118→
+   119→interface SocialLinksData {
+   120→  whatsapp?: string
+   121→  youtube?: string
+   122→  telegram?: string
+   123→  instagram?: string
+   124→  twitter?: string
+   125→  facebook?: string
+   126→}
+   127→
+   128→interface ConfigFormState {
+   129→  orgName: string
+   130→  logo: string
+   131→  favicon: string
+   132→  primaryColor: string
+   133→  secondaryColor: string
+   134→  accentColor: string
+   135→  fontFamily: string
+   136→  customCSS: string
+   137→  heroTitle: string
+   138→  heroSubtitle: string
+   139→  heroImage: string
+   140→  footerText: string
+   141→  socialLinks: SocialLinksData
+   142→  seoTitle: string
+   143→  seoDescription: string
+   144→  pwaEnabled: boolean
+   145→  analyticsId: string
+   146→  facebookPixelId: string
+   147→  templateId: string
+   148→}
+   149→
+   150→const defaultConfigForm: ConfigFormState = {
+   151→  orgName: '',
+   152→  logo: '',
+   153→  favicon: '',
+   154→  primaryColor: '#d97706',
+   155→  secondaryColor: '#1f2937',
+   156→  accentColor: '#d97706',
+   157→  fontFamily: 'Inter',
+   158→  customCSS: '',
+   159→  heroTitle: '',
+   160→  heroSubtitle: '',
+   161→  heroImage: '',
+   162→  footerText: '',
+   163→  socialLinks: {},
+   164→  seoTitle: '',
+   165→  seoDescription: '',
+   166→  pwaEnabled: false,
+   167→  analyticsId: '',
+   168→  facebookPixelId: '',
+   169→  templateId: 'default',
+   170→}
+   171→
+   172→const FONT_OPTIONS = ['Inter', 'Poppins', 'Roboto', 'Open Sans', 'Lato', 'Montserrat']
+   173→const TEMPLATE_OPTIONS = [
+   174→  { value: 'default', label: 'Default' },
+   175→  { value: 'modern', label: 'Modern' },
+   176→  { value: 'classic', label: 'Classic' },
+   177→  { value: 'minimal', label: 'Minimal' },
+   178→]
+   179→const BUILD_TYPES = [
+   180→  { value: 'website', label: 'Website', icon: Globe },
+   181→  { value: 'app_android', label: 'Android App', icon: Smartphone },
+   182→  { value: 'app_ios', label: 'iOS App', icon: Smartphone },
+   183→  { value: 'app_both', label: 'Both (Android + iOS)', icon: Smartphone },
+   184→]
+   185→
+   186→// ── Helpers ───────────────────────────────────────────────────────────────────
+   187→function formatDate(dateStr: string): string {
+   188→  try {
+   189→    return new Date(dateStr).toLocaleDateString('en-IN', {
+   190→      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+   191→    })
+   192→  } catch { return dateStr }
+   193→}
+   194→
+   195→function formatFileSize(bytes: number | null): string {
+   196→  if (!bytes) return '—'
+   197→  if (bytes < 1024) return `${bytes} B`
+   198→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+   199→  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+   200→}
+   201→
+   202→function getBuildTypeLabel(type: string): string {
+   203→  const map: Record<string, string> = {
+   204→    website: 'Website',
+   205→    app_android: 'Android App',
+   206→    app_ios: 'iOS App',
+   207→    app_both: 'Both Apps',
+   208→  }
+   209→  return map[type] || type
+   210→}
+   211→
+   212→function getStatusBadge(status: string) {
+   213→  switch (status) {
+   214→    case 'active':
+   215→    case 'completed':
+   216→      return <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 border-0 text-[11px]">{status === 'completed' ? 'Completed' : 'Active'}</Badge>
+   217→    case 'pending':
+   218→      return <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 border-0 text-[11px]">Pending</Badge>
+   219→    case 'verifying':
+   220→    case 'generating':
+   221→      return <Badge className="bg-sky-500/15 text-sky-600 hover:bg-sky-500/15 border-0 text-[11px]">{status === 'verifying' ? 'Verifying' : 'Generating'}</Badge>
+   222→    case 'failed':
+   223→    case 'error':
+   224→      return <Badge className="bg-red-500/15 text-red-600 hover:bg-red-500/15 border-0 text-[11px]">{status === 'failed' ? 'Failed' : 'Error'}</Badge>
+   225→    default:
+   226→      return <Badge variant="secondary" className="text-[11px]">{status}</Badge>
+   227→  }
+   228→}
+   229→
+   230→function parseSocialLinks(raw: string | null): SocialLinksData {
+   231→  if (!raw) return {}
+   232→  try { return JSON.parse(raw) } catch { return {} }
+   233→}
+   234→
+   235→// ── Loading Skeletons ─────────────────────────────────────────────────────────
+   236→function PageSkeleton() {
+   237→  return (
+   238→    <div className="space-y-6">
+   239→      <div className="flex items-center gap-3">
+   240→        <Skeleton className="size-9 rounded-lg" />
+   241→        <div className="space-y-2">
+   242→          <Skeleton className="h-7 w-52" />
+   243→          <Skeleton className="h-4 w-72" />
+   244→        </div>
+   245→      </div>
+   246→      <Skeleton className="h-10 w-64" />
+   247→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   248→        <div className="lg:col-span-2 space-y-4">
+   249→          <Skeleton className="h-96 rounded-xl" />
+   250→        </div>
+   251→        <Skeleton className="h-96 rounded-xl" />
+   252→      </div>
+   253→    </div>
+   254→  )
+   255→}
+   256→
+   257→// ── Live Preview Card ─────────────────────────────────────────────────────────
+   258→function LivePreviewCard({ config }: { config: ConfigFormState }) {
+   259→  return (
+   260→    <Card className="bg-white shadow-sm rounded-xl overflow-hidden">
+   261→      <CardHeader className="pb-3">
+   262→        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   263→          <Eye className="size-4 text-amber-600" />
+   264→          Live Preview
+   265→        </CardTitle>
+   266→      </CardHeader>
+   267→      <CardContent className="p-4 pt-0">
+   268→        <div className="rounded-lg overflow-hidden border border-gray-200 shadow-inner">
+   269→          {/* Browser chrome */}
+   270→          <div className="bg-gray-100 border-b border-gray-200 px-3 py-1.5 flex items-center gap-2">
+   271→            <div className="flex gap-1.5">
+   272→              <div className="size-2.5 rounded-full bg-red-400" />
+   273→              <div className="size-2.5 rounded-full bg-yellow-400" />
+   274→              <div className="size-2.5 rounded-full bg-green-400" />
+   275→            </div>
+   276→            <div className="flex-1 bg-white rounded px-2 py-0.5 text-[10px] text-gray-400 font-mono truncate">
+   277→              {config.orgName || 'yourbrand'}.com
+   278→            </div>
+   279→          </div>
+   280→          {/* Page preview */}
+   281→          <div
+   282→            className="min-h-[220px] relative"
+   283→            style={{ fontFamily: config.fontFamily || 'Inter' }}
+   284→          >
+   285→            {/* Navbar */}
+   286→            <div
+   287→              className="flex items-center justify-between px-3 py-2"
+   288→              style={{ backgroundColor: config.primaryColor || '#d97706' }}
+   289→            >
+   290→              <div className="flex items-center gap-2">
+   291→                {config.logo ? (
+   292→                  <img src={config.logo} alt="Logo" className="size-5 rounded object-contain bg-white/20" />
+   293→                ) : (
+   294→                  <div className="size-5 rounded bg-white/25 flex items-center justify-center text-[8px] font-bold text-white">
+   295→                    {(config.orgName || 'B')[0]}
+   296→                  </div>
+   297→                )}
+   298→                <span className="text-white text-[10px] font-bold truncate max-w-[80px]">
+   299→                  {config.orgName || 'Brand Name'}
+   300→                </span>
+   301→              </div>
+   302→              <div className="flex gap-2">
+   303→                {[1, 2, 3].map(i => (
+   304→                  <div key={i} className="text-white/70 text-[7px]">Link {i}</div>
+   305→                ))}
+   306→              </div>
+   307→            </div>
+   308→
+   309→            {/* Hero Section */}
+   310→            <div
+   311→              className="px-3 py-4 text-center relative"
+   312→              style={{
+   313→                backgroundColor: config.secondaryColor || '#1f2937',
+   314→                backgroundImage: config.heroImage ? `url(${config.heroImage})` : undefined,
+   315→                backgroundSize: 'cover',
+   316→                backgroundPosition: 'center',
+   317→              }}
+   318→            >
+   319→              {config.heroImage && <div className="absolute inset-0 bg-black/50" />}
+   320→              <div className="relative z-10">
+   321→                <h2 className="text-white text-sm font-bold mb-1 truncate">
+   322→                  {config.heroTitle || 'Welcome to ' + (config.orgName || 'Our Platform')}
+   323→                </h2>
+   324→                <p className="text-white/70 text-[9px] truncate">
+   325→                  {config.heroSubtitle || 'Learn from the best educators'}
+   326→                </p>
+   327→                <button
+   328→                  className="mt-2 px-3 py-1 rounded text-[8px] font-bold text-white"
+   329→                  style={{ backgroundColor: config.accentColor || '#d97706' }}
+   330→                >
+   331→                  Explore Now
+   332→                </button>
+   333→              </div>
+   334→            </div>
+   335→
+   336→            {/* Content preview */}
+   337→            <div className="px-3 py-2 bg-white">
+   338→              <div className="grid grid-cols-2 gap-1.5">
+   339→                {[1, 2, 3, 4].map(i => (
+   340→                  <div key={i} className="rounded border border-gray-100 p-1.5">
+   341→                    <div className="h-6 rounded bg-gray-100 mb-1" />
+   342→                    <div className="h-1.5 bg-gray-200 rounded w-3/4" />
+   343→                  </div>
+   344→                ))}
+   345→              </div>
+   346→            </div>
+   347→
+   348→            {/* Footer */}
+   349→            <div
+   350→              className="px-3 py-1.5 text-center text-white text-[7px]"
+   351→              style={{ backgroundColor: config.primaryColor || '#d97706' }}
+   352→            >
+   353→              {config.footerText || `© ${new Date().getFullYear()} ${config.orgName || 'Brand'}. All rights reserved.`}
+   354→            </div>
+   355→          </div>
+   356→        </div>
+   357→      </CardContent>
+   358→    </Card>
+   359→  )
+   360→}
+   361→
+   362→// ── Main Component ────────────────────────────────────────────────────────────
+   363→export default function AdminWhiteLabelPage() {
+   364→  // ── State ──
+   365→  const [teachers, setTeachers] = useState<TeacherData[]>([])
+   366→  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
+   367→  const [loading, setLoading] = useState(true)
+   368→  const [fetchError, setFetchError] = useState('')
+   369→
+   370→  // Config state
+   371→  const [config, setConfig] = useState<ConfigFormState>(defaultConfigForm)
+   372→  const [configLoading, setConfigLoading] = useState(false)
+   373→  const [savingConfig, setSavingConfig] = useState(false)
+   374→
+   375→  // Domain state
+   376→  const [domains, setDomains] = useState<CustomDomainData[]>([])
+   377→  const [domainsLoading, setDomainsLoading] = useState(false)
+   378→  const [newDomain, setNewDomain] = useState('')
+   379→  const [newDomainTarget, setNewDomainTarget] = useState('website')
+   380→  const [addingDomain, setAddingDomain] = useState(false)
+   381→  const [deleteDomainId, setDeleteDomainId] = useState<string | null>(null)
+   382→
+   383→  // Build state
+   384→  const [builds, setBuilds] = useState<BuildRecordData[]>([])
+   385→  const [buildsLoading, setBuildsLoading] = useState(false)
+   386→  const [buildDialogOpen, setBuildDialogOpen] = useState(false)
+   387→  const [buildType, setBuildType] = useState('website')
+   388→  const [buildChangelog, setBuildChangelog] = useState('')
+   389→  const [creatingBuild, setCreatingBuild] = useState(false)
+   390→
+   391→  // Active tab
+   392→  const [activeTab, setActiveTab] = useState('branding')
+   393→
+   394→  // ── Fetch teachers ──
+   395→  const fetchTeachers = useCallback(async () => {
+   396→    try {
+   397→      setLoading(true)
+   398→      setFetchError('')
+   399→      const res = await apiFetch('/api/admin/teachers')
+   400→      const data = await res.json()
+   401→      if (data.success) {
+   402→        setTeachers(data.teachers)
+   403→      } else {
+   404→        setFetchError(data.message || 'Failed to fetch teachers')
+   405→      }
+   406→    } catch {
+   407→      setFetchError('Failed to connect to server')
+   408→    } finally {
+   409→      setLoading(false)
+   410→    }
+   411→  }, [])
+   412→
+   413→  useEffect(() => {
+   414→    fetchTeachers()
+   415→  }, [fetchTeachers])
+   416→
+   417→  // ── Fetch data when teacher changes ──
+   418→  const fetchConfig = useCallback(async () => {
+   419→    if (!selectedTeacherId) return
+   420→    try {
+   421→      setConfigLoading(true)
+   422→      const res = await apiFetch(`/api/admin/white-label?teacherId=${selectedTeacherId}&section=config`)
+   423→      const data = await res.json()
+   424→      if (data.success && data.config) {
+   425→        const c = data.config as WhiteLabelConfig
+   426→        setConfig({
+   427→          orgName: c.orgName || '',
+   428→          logo: c.logo || '',
+   429→          favicon: c.favicon || '',
+   430→          primaryColor: c.primaryColor || '#d97706',
+   431→          secondaryColor: c.secondaryColor || '#1f2937',
+   432→          accentColor: c.accentColor || '#d97706',
+   433→          fontFamily: c.fontFamily || 'Inter',
+   434→          customCSS: c.customCSS || '',
+   435→          heroTitle: c.heroTitle || '',
+   436→          heroSubtitle: c.heroSubtitle || '',
+   437→          heroImage: c.heroImage || '',
+   438→          footerText: c.footerText || '',
+   439→          socialLinks: parseSocialLinks(c.socialLinks),
+   440→          seoTitle: c.seoTitle || '',
+   441→          seoDescription: c.seoDescription || '',
+   442→          pwaEnabled: c.pwaEnabled || false,
+   443→          analyticsId: c.analyticsId || '',
+   444→          facebookPixelId: c.facebookPixelId || '',
+   445→          templateId: c.templateId || 'default',
+   446→        })
+   447→      }
+   448→    } catch {
+   449→      toast.error('Failed to load config')
+   450→    } finally {
+   451→      setConfigLoading(false)
+   452→    }
+   453→  }, [selectedTeacherId])
+   454→
+   455→  const fetchDomains = useCallback(async () => {
+   456→    if (!selectedTeacherId) return
+   457→    try {
+   458→      setDomainsLoading(true)
+   459→      const res = await apiFetch(`/api/admin/white-label?teacherId=${selectedTeacherId}&section=domains`)
+   460→      const data = await res.json()
+   461→      if (data.success) {
+   462→        setDomains(data.domains || [])
+   463→      }
+   464→    } catch {
+   465→      toast.error('Failed to load domains')
+   466→    } finally {
+   467→      setDomainsLoading(false)
+   468→    }
+   469→  }, [selectedTeacherId])
+   470→
+   471→  const fetchBuilds = useCallback(async () => {
+   472→    if (!selectedTeacherId) return
+   473→    try {
+   474→      setBuildsLoading(true)
+   475→      const res = await apiFetch(`/api/admin/white-label?teacherId=${selectedTeacherId}&section=builds`)
+   476→      const data = await res.json()
+   477→      if (data.success) {
+   478→        setBuilds(data.builds || [])
+   479→      }
+   480→    } catch {
+   481→      toast.error('Failed to load builds')
+   482→    } finally {
+   483→      setBuildsLoading(false)
+   484→    }
+   485→  }, [selectedTeacherId])
+   486→
+   487→  useEffect(() => {
+   488→    if (selectedTeacherId) {
+   489→      fetchConfig()
+   490→      fetchDomains()
+   491→      fetchBuilds()
+   492→    } else {
+   493→      setConfig(defaultConfigForm)
+   494→      setDomains([])
+   495→      setBuilds([])
+   496→    }
+   497→  }, [selectedTeacherId, fetchConfig, fetchDomains, fetchBuilds])
+   498→
+   499→  // Auto-refresh builds to catch simulated completions
+   500→  useEffect(() => {
+   501→    if (!selectedTeacherId) return
+   502→    const hasPendingBuilds = builds.some(b => b.status === 'pending' || b.status === 'generating')
+   503→    if (!hasPendingBuilds) return
+   504→    const interval = setInterval(() => fetchBuilds(), 4000)
+   505→    return () => clearInterval(interval)
+   506→  }, [selectedTeacherId, builds, fetchBuilds])
+   507→
+   508→  // ── Selected teacher info ──
+   509→  const selectedTeacher = teachers.find(t => t.id === selectedTeacherId)
+   510→
+   511→  // ── Save config handler ──
+   512→  const handleSaveConfig = async () => {
+   513→    if (!selectedTeacherId) return
+   514→    try {
+   515→      setSavingConfig(true)
+   516→      const res = await apiFetch('/api/admin/white-label', {
+   517→        method: 'POST',
+   518→        headers: { 'Content-Type': 'application/json' },
+   519→        body: JSON.stringify({
+   520→          action: 'save_config',
+   521→          teacherId: selectedTeacherId,
+   522→          config: {
+   523→            orgName: config.orgName,
+   524→            logo: config.logo || null,
+   525→            favicon: config.favicon || null,
+   526→            primaryColor: config.primaryColor,
+   527→            secondaryColor: config.secondaryColor || null,
+   528→            accentColor: config.accentColor,
+   529→            fontFamily: config.fontFamily,
+   530→            customCSS: config.customCSS || null,
+   531→            heroTitle: config.heroTitle || null,
+   532→            heroSubtitle: config.heroSubtitle || null,
+   533→            heroImage: config.heroImage || null,
+   534→            footerText: config.footerText || null,
+   535→            socialLinks: config.socialLinks,
+   536→            seoTitle: config.seoTitle || null,
+   537→            seoDescription: config.seoDescription || null,
+   538→            pwaEnabled: config.pwaEnabled,
+   539→            analyticsId: config.analyticsId || null,
+   540→            facebookPixelId: config.facebookPixelId || null,
+   541→            templateId: config.templateId,
+   542→          },
+   543→        }),
+   544→      })
+   545→      const data = await res.json()
+   546→      if (data.success) {
+   547→        toast.success('Branding config saved!', { description: 'White-label settings updated successfully.' })
+   548→      } else {
+   549→        toast.error('Save failed', { description: data.message })
+   550→      }
+   551→    } catch {
+   552→      toast.error('Save failed', { description: 'Network error. Please try again.' })
+   553→    } finally {
+   554→      setSavingConfig(false)
+   555→    }
+   556→  }
+   557→
+   558→  // ── Add domain handler ──
+   559→  const handleAddDomain = async () => {
+   560→    if (!selectedTeacherId || !newDomain.trim()) return
+   561→    if (!selectedTeacher?.organization?.id) {
+   562→      toast.error('Teacher has no organization')
+   563→      return
+   564→    }
+   565→    try {
+   566→      setAddingDomain(true)
+   567→      const res = await apiFetch('/api/admin/white-label', {
+   568→        method: 'POST',
+   569→        headers: { 'Content-Type': 'application/json' },
+   570→        body: JSON.stringify({
+   571→          action: 'add_domain',
+   572→          teacherId: selectedTeacherId,
+   573→          domain: newDomain.trim(),
+   574→          organizationId: selectedTeacher.organization.id,
+   575→          targetType: newDomainTarget,
+   576→        }),
+   577→      })
+   578→      const data = await res.json()
+   579→      if (data.success) {
+   580→        toast.success('Domain added!', { description: `${newDomain} is now pending verification.` })
+   581→        setNewDomain('')
+   582→        fetchDomains()
+   583→      } else {
+   584→        toast.error('Failed to add domain', { description: data.message })
+   585→      }
+   586→    } catch {
+   587→      toast.error('Failed to add domain')
+   588→    } finally {
+   589→      setAddingDomain(false)
+   590→    }
+   591→  }
+   592→
+   593→  // ── Verify domain handler ──
+   594→  const handleVerifyDomain = async (domainId: string) => {
+   595→    try {
+   596→      const res = await apiFetch('/api/admin/white-label', {
+   597→        method: 'POST',
+   598→        headers: { 'Content-Type': 'application/json' },
+   599→        body: JSON.stringify({ action: 'verify_domain', domainId }),
+   600→      })
+   601→      const data = await res.json()
+   602→      if (data.success) {
+   603→        toast.success('Domain verified!', { description: 'SSL certificate has been provisioned.' })
+   604→        fetchDomains()
+   605→      } else {
+   606→        toast.error('Verification failed', { description: data.message })
+   607→      }
+   608→    } catch {
+   609→      toast.error('Verification failed')
+   610→    }
+   611→  }
+   612→
+   613→  // ── Delete domain handler ──
+   614→  const handleDeleteDomain = async () => {
+   615→    if (!deleteDomainId) return
+   616→    try {
+   617→      const res = await apiFetch('/api/admin/white-label', {
+   618→        method: 'POST',
+   619→        headers: { 'Content-Type': 'application/json' },
+   620→        body: JSON.stringify({ action: 'delete_domain', domainId: deleteDomainId }),
+   621→      })
+   622→      const data = await res.json()
+   623→      if (data.success) {
+   624→        toast.success('Domain removed')
+   625→        fetchDomains()
+   626→      } else {
+   627→        toast.error('Failed to delete domain', { description: data.message })
+   628→      }
+   629→    } catch {
+   630→      toast.error('Failed to delete domain')
+   631→    } finally {
+   632→      setDeleteDomainId(null)
+   633→    }
+   634→  }
+   635→
+   636→  // ── Create build handler ──
+   637→  const handleCreateBuild = async () => {
+   638→    if (!selectedTeacherId) return
+   639→    try {
+   640→      setCreatingBuild(true)
+   641→      const res = await apiFetch('/api/admin/white-label', {
+   642→        method: 'POST',
+   643→        headers: { 'Content-Type': 'application/json' },
+   644→        body: JSON.stringify({
+   645→          action: 'rebuild',
+   646→          teacherId: selectedTeacherId,
+   647→          type: buildType,
+   648→          changelog: buildChangelog.trim() || null,
+   649→        }),
+   650→      })
+   651→      const data = await res.json()
+   652→      if (data.success) {
+   653→        toast.success('Build queued!', { description: `${getBuildTypeLabel(buildType)} build v${data.build?.version} has been started.` })
+   654→        setBuildDialogOpen(false)
+   655→        setBuildChangelog('')
+   656→        fetchBuilds()
+   657→      } else {
+   658→        toast.error('Build failed', { description: data.message })
+   659→      }
+   660→    } catch {
+   661→      toast.error('Build failed')
+   662→    } finally {
+   663→      setCreatingBuild(false)
+   664→    }
+   665→  }
+   666→
+   667→  // ── Update social link helper ──
+   668→  const updateSocialLink = (key: keyof SocialLinksData, value: string) => {
+   669→    setConfig(prev => ({
+   670→      ...prev,
+   671→      socialLinks: { ...prev.socialLinks, [key]: value },
+   672→    }))
+   673→  }
+   674→
+   675→  // ── Render ──
+   676→  if (loading) return <PageSkeleton />
+   677→
+   678→  return (
+   679→    <div className="space-y-6">
+   680→      {/* Page Header */}
+   681→      <motion.div
+   682→        initial={{ opacity: 0, y: -8 }}
+   683→        animate={{ opacity: 1, y: 0 }}
+   684→        transition={{ duration: 0.3 }}
+   685→        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+   686→      >
+   687→        <div>
+   688→          <div className="flex items-center gap-2.5">
+   689→            <div className="flex items-center justify-center size-9 rounded-lg bg-amber-100">
+   690→              <Palette className="size-5 text-amber-600" />
+   691→            </div>
+   692→            <h1 className="text-2xl font-bold text-gray-900">White-Label Builder</h1>
+   693→          </div>
+   694→          <p className="text-sm text-muted-foreground mt-1.5 ml-[46px]">
+   695→            Configure branding, domains &amp; builds for each teacher
+   696→          </p>
+   697→        </div>
+   698→        <Button
+   699→          variant="outline"
+   700→          className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 shrink-0 self-start sm:self-auto"
+   701→          onClick={fetchTeachers}
+   702→          disabled={loading}
+   703→        >
+   704→          <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
+   705→          Refresh
+   706→        </Button>
+   707→      </motion.div>
+   708→
+   709→      {/* Error State */}
+   710→      {fetchError && (
+   711→        <Card className="bg-white shadow-sm rounded-xl border border-red-100">
+   712→          <CardContent className="p-6 flex flex-col items-center justify-center gap-3">
+   713→            <div className="flex items-center justify-center size-14 rounded-full bg-red-50">
+   714→              <AlertCircle className="size-7 text-red-500" />
+   715→            </div>
+   716→            <p className="text-sm text-muted-foreground">{fetchError}</p>
+   717→            <Button variant="outline" size="sm" onClick={fetchTeachers} className="gap-2">
+   718→              <RefreshCw className="size-3.5" /> Retry
+   719→            </Button>
+   720→          </CardContent>
+   721→        </Card>
+   722→      )}
+   723→
+   724→      {/* Teacher Selector */}
+   725→      <motion.div
+   726→        initial={{ opacity: 0, y: 8 }}
+   727→        animate={{ opacity: 1, y: 0 }}
+   728→        transition={{ duration: 0.3, delay: 0.05 }}
+   729→      >
+   730→        <Card className="bg-white shadow-sm rounded-xl">
+   731→          <CardContent className="p-4">
+   732→            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+   733→              <div className="flex items-center gap-2 shrink-0">
+   734→                <Users className="size-4 text-amber-600" />
+   735→                <Label className="text-sm font-medium text-gray-700">Select Teacher</Label>
+   736→              </div>
+   737→              <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+   738→                <SelectTrigger className="w-full sm:w-[360px] bg-white border-gray-200 focus:border-amber-300">
+   739→                  <SelectValue placeholder="Choose a teacher to configure..." />
+   740→                </SelectTrigger>
+   741→                <SelectContent>
+   742→                  {teachers.map(t => (
+   743→                    <SelectItem key={t.id} value={t.id}>
+   744→                      <span className="flex items-center gap-2">
+   745→                        <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: t.organization?.accentColor || '#d97706' }} />
+   746→                        <span>{t.name}</span>
+   747→                        <span className="text-muted-foreground text-xs">({t.organization?.name || 'No Org'})</span>
+   748→                      </span>
+   749→                    </SelectItem>
+   750→                  ))}
+   751→                </SelectContent>
+   752→              </Select>
+   753→              {selectedTeacher && (
+   754→                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   755→                  <Building2 className="size-3.5" />
+   756→                  <span>{selectedTeacher.organization?.name || 'No Organization'}</span>
+   757→                  {selectedTeacher.organization?.code && (
+   758→                    <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">
+   759→                      {selectedTeacher.organization.code}
+   760→                    </span>
+   761→                  )}
+   762→                </div>
+   763→              )}
+   764→            </div>
+   765→          </CardContent>
+   766→        </Card>
+   767→      </motion.div>
+   768→
+   769→      {/* No teacher selected state */}
+   770→      {!selectedTeacherId && !fetchError && (
+   771→        <motion.div
+   772→          initial={{ opacity: 0, y: 12 }}
+   773→          animate={{ opacity: 1, y: 0 }}
+   774→          transition={{ duration: 0.3, delay: 0.1 }}
+   775→        >
+   776→          <Card className="bg-white shadow-sm rounded-xl">
+   777→            <CardContent className="p-10 flex flex-col items-center justify-center gap-4">
+   778→              <div className="flex items-center justify-center size-16 rounded-full bg-amber-50">
+   779→                <Palette className="size-8 text-amber-400" />
+   780→              </div>
+   781→              <div className="text-center">
+   782→                <p className="text-base font-semibold text-gray-900">Select a teacher to begin</p>
+   783→                <p className="text-sm text-muted-foreground mt-1">
+   784→                  Choose a teacher from the dropdown above to manage their white-label branding, domains, and builds.
+   785→                </p>
+   786→              </div>
+   787→            </CardContent>
+   788→          </Card>
+   789→        </motion.div>
+   790→      )}
+   791→
+   792→      {/* Main Content */}
+   793→      {selectedTeacherId && (
+   794→        <motion.div
+   795→          initial={{ opacity: 0, y: 12 }}
+   796→          animate={{ opacity: 1, y: 0 }}
+   797→          transition={{ duration: 0.3, delay: 0.1 }}
+   798→        >
+   799→          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+   800→            <TabsList className="bg-white border border-gray-200 shadow-sm rounded-lg p-1 h-auto">
+   801→              <TabsTrigger value="branding" className="gap-2 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 rounded-md px-4 py-2 text-sm">
+   802→                <Palette className="size-4" /> Branding
+   803→              </TabsTrigger>
+   804→              <TabsTrigger value="domains" className="gap-2 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 rounded-md px-4 py-2 text-sm">
+   805→                <Globe className="size-4" /> Domains
+   806→              </TabsTrigger>
+   807→              <TabsTrigger value="builds" className="gap-2 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 rounded-md px-4 py-2 text-sm">
+   808→                <Hammer className="size-4" /> Build History
+   809→              </TabsTrigger>
+   810→            </TabsList>
+   811→
+   812→            {/* ─── BRANDING TAB ──────────────────────────────────────────── */}
+   813→            <TabsContent value="branding" className="space-y-6 mt-4">
+   814→              {configLoading ? (
+   815→                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   816→                  <div className="lg:col-span-2 space-y-4">
+   817→                    <Card className="bg-white shadow-sm rounded-xl"><CardContent className="p-6"><div className="space-y-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div></CardContent></Card>
+   818→                  </div>
+   819→                  <Skeleton className="h-96 rounded-xl" />
+   820→                </div>
+   821→              ) : (
+   822→                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   823→                  {/* Form fields */}
+   824→                  <div className="lg:col-span-2 space-y-4">
+   825→                    {/* Basic Branding */}
+   826→                    <Card className="bg-white shadow-sm rounded-xl">
+   827→                      <CardHeader className="pb-3">
+   828→                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   829→                          <Building2 className="size-4 text-amber-600" />
+   830→                          Basic Branding
+   831→                        </CardTitle>
+   832→                      </CardHeader>
+   833→                      <CardContent className="space-y-4">
+   834→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   835→                          <div className="space-y-1.5">
+   836→                            <Label className="text-xs font-medium text-gray-700">Organization Name</Label>
+   837→                            <Input
+   838→                              value={config.orgName}
+   839→                              onChange={e => setConfig(prev => ({ ...prev, orgName: e.target.value }))}
+   840→                              placeholder="e.g. My Academy"
+   841→                              className="h-9 text-sm"
+   842→                            />
+   843→                          </div>
+   844→                          <div className="space-y-1.5">
+   845→                            <Label className="text-xs font-medium text-gray-700">Font Family</Label>
+   846→                            <Select value={config.fontFamily} onValueChange={v => setConfig(prev => ({ ...prev, fontFamily: v }))}>
+   847→                              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+   848→                              <SelectContent>
+   849→                                {FONT_OPTIONS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+   850→                              </SelectContent>
+   851→                            </Select>
+   852→                          </div>
+   853→                        </div>
+   854→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   855→                          <div className="space-y-1.5">
+   856→                            <Label className="text-xs font-medium text-gray-700">Logo URL</Label>
+   857→                            <div className="flex gap-2">
+   858→                              <Input
+   859→                                value={config.logo}
+   860→                                onChange={e => setConfig(prev => ({ ...prev, logo: e.target.value }))}
+   861→                                placeholder="https://..."
+   862→                                className="h-9 text-sm flex-1"
+   863→                              />
+   864→                              {config.logo && (
+   865→                                <img src={config.logo} alt="Logo preview" className="size-9 rounded border border-gray-200 object-contain bg-white p-0.5 shrink-0" />
+   866→                              )}
+   867→                            </div>
+   868→                          </div>
+   869→                          <div className="space-y-1.5">
+   870→                            <Label className="text-xs font-medium text-gray-700">Favicon URL</Label>
+   871→                            <Input
+   872→                              value={config.favicon}
+   873→                              onChange={e => setConfig(prev => ({ ...prev, favicon: e.target.value }))}
+   874→                              placeholder="https://..."
+   875→                              className="h-9 text-sm"
+   876→                            />
+   877→                          </div>
+   878→                        </div>
+   879→
+   880→                        {/* Colors */}
+   881→                        <Separator />
+   882→                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   883→                          <div className="space-y-1.5">
+   884→                            <Label className="text-xs font-medium text-gray-700">Primary Color</Label>
+   885→                            <div className="flex items-center gap-2">
+   886→                              <input
+   887→                                type="color"
+   888→                                value={config.primaryColor}
+   889→                                onChange={e => setConfig(prev => ({ ...prev, primaryColor: e.target.value }))}
+   890→                                className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer p-1 shrink-0"
+   891→                              />
+   892→                              <Input
+   893→                                value={config.primaryColor}
+   894→                                onChange={e => setConfig(prev => ({ ...prev, primaryColor: e.target.value }))}
+   895→                                className="h-9 text-sm font-mono"
+   896→                              />
+   897→                              <div className="size-9 rounded-lg border border-gray-200 shrink-0" style={{ backgroundColor: config.primaryColor }} />
+   898→                            </div>
+   899→                          </div>
+   900→                          <div className="space-y-1.5">
+   901→                            <Label className="text-xs font-medium text-gray-700">Secondary Color</Label>
+   902→                            <div className="flex items-center gap-2">
+   903→                              <input
+   904→                                type="color"
+   905→                                value={config.secondaryColor}
+   906→                                onChange={e => setConfig(prev => ({ ...prev, secondaryColor: e.target.value }))}
+   907→                                className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer p-1 shrink-0"
+   908→                              />
+   909→                              <Input
+   910→                                value={config.secondaryColor}
+   911→                                onChange={e => setConfig(prev => ({ ...prev, secondaryColor: e.target.value }))}
+   912→                                className="h-9 text-sm font-mono"
+   913→                              />
+   914→                              <div className="size-9 rounded-lg border border-gray-200 shrink-0" style={{ backgroundColor: config.secondaryColor }} />
+   915→                            </div>
+   916→                          </div>
+   917→                          <div className="space-y-1.5">
+   918→                            <Label className="text-xs font-medium text-gray-700">Accent Color</Label>
+   919→                            <div className="flex items-center gap-2">
+   920→                              <input
+   921→                                type="color"
+   922→                                value={config.accentColor}
+   923→                                onChange={e => setConfig(prev => ({ ...prev, accentColor: e.target.value }))}
+   924→                                className="w-9 h-9 rounded-lg border border-gray-200 cursor-pointer p-1 shrink-0"
+   925→                              />
+   926→                              <Input
+   927→                                value={config.accentColor}
+   928→                                onChange={e => setConfig(prev => ({ ...prev, accentColor: e.target.value }))}
+   929→                                className="h-9 text-sm font-mono"
+   930→                              />
+   931→                              <div className="size-9 rounded-lg border border-gray-200 shrink-0" style={{ backgroundColor: config.accentColor }} />
+   932→                            </div>
+   933→                          </div>
+   934→                        </div>
+   935→
+   936→                        {/* Color presets */}
+   937→                        <div className="flex items-center gap-2 flex-wrap">
+   938→                          <span className="text-[10px] text-muted-foreground font-medium">Presets:</span>
+   939→                          {['#d97706', '#059669', '#7c3aed', '#dc2626', '#0891b2', '#c026d3', '#ea580c', '#16a34a', '#0d9488', '#4f46e5'].map(color => (
+   940→                            <button
+   941→                              key={color}
+   942→                              type="button"
+   943→                              onClick={() => setConfig(prev => ({ ...prev, primaryColor: color, accentColor: color }))}
+   944→                              className={`size-6 rounded-full border-2 transition-all cursor-pointer ${
+   945→                                config.primaryColor === color ? 'border-gray-900 scale-110' : 'border-transparent hover:border-gray-300'
+   946→                              }`}
+   947→                              style={{ backgroundColor: color }}
+   948→                            />
+   949→                          ))}
+   950→                        </div>
+   951→                      </CardContent>
+   952→                    </Card>
+   953→
+   954→                    {/* Hero Section */}
+   955→                    <Card className="bg-white shadow-sm rounded-xl">
+   956→                      <CardHeader className="pb-3">
+   957→                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+   958→                          <Monitor className="size-4 text-amber-600" />
+   959→                          Hero Section
+   960→                        </CardTitle>
+   961→                      </CardHeader>
+   962→                      <CardContent className="space-y-4">
+   963→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   964→                          <div className="space-y-1.5">
+   965→                            <Label className="text-xs font-medium text-gray-700">Hero Title</Label>
+   966→                            <Input
+   967→                              value={config.heroTitle}
+   968→                              onChange={e => setConfig(prev => ({ ...prev, heroTitle: e.target.value }))}
+   969→                              placeholder="Welcome to Our Platform"
+   970→                              className="h-9 text-sm"
+   971→                            />
+   972→                          </div>
+   973→                          <div className="space-y-1.5">
+   974→                            <Label className="text-xs font-medium text-gray-700">Hero Subtitle</Label>
+   975→                            <Input
+   976→                              value={config.heroSubtitle}
+   977→                              onChange={e => setConfig(prev => ({ ...prev, heroSubtitle: e.target.value }))}
+   978→                              placeholder="Learn from the best educators"
+   979→                              className="h-9 text-sm"
+   980→                            />
+   981→                          </div>
+   982→                        </div>
+   983→                        <div className="space-y-1.5">
+   984→                          <Label className="text-xs font-medium text-gray-700">Hero Image URL</Label>
+   985→                          <Input
+   986→                            value={config.heroImage}
+   987→                            onChange={e => setConfig(prev => ({ ...prev, heroImage: e.target.value }))}
+   988→                            placeholder="https://example.com/hero-bg.jpg"
+   989→                            className="h-9 text-sm"
+   990→                          />
+   991→                        </div>
+   992→                        <div className="space-y-1.5">
+   993→                          <Label className="text-xs font-medium text-gray-700">Footer Text</Label>
+   994→                          <Input
+   995→                            value={config.footerText}
+   996→                            onChange={e => setConfig(prev => ({ ...prev, footerText: e.target.value }))}
+   997→                            placeholder="© 2024 My Academy. All rights reserved."
+   998→                            className="h-9 text-sm"
+   999→                          />
+  1000→                        </div>
+  1001→                      </CardContent>
+  1002→                    </Card>
+  1003→
+  1004→                    {/* SEO & Social */}
+  1005→                    <Card className="bg-white shadow-sm rounded-xl">
+  1006→                      <CardHeader className="pb-3">
+  1007→                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1008→                          <Search className="size-4 text-amber-600" />
+  1009→                          SEO &amp; Social
+  1010→                        </CardTitle>
+  1011→                      </CardHeader>
+  1012→                      <CardContent className="space-y-4">
+  1013→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1014→                          <div className="space-y-1.5">
+  1015→                            <Label className="text-xs font-medium text-gray-700">SEO Title</Label>
+  1016→                            <Input
+  1017→                              value={config.seoTitle}
+  1018→                              onChange={e => setConfig(prev => ({ ...prev, seoTitle: e.target.value }))}
+  1019→                              placeholder="My Academy - Online Learning"
+  1020→                              className="h-9 text-sm"
+  1021→                            />
+  1022→                          </div>
+  1023→                          <div className="space-y-1.5">
+  1024→                            <Label className="text-xs font-medium text-gray-700">SEO Description</Label>
+  1025→                            <Input
+  1026→                              value={config.seoDescription}
+  1027→                              onChange={e => setConfig(prev => ({ ...prev, seoDescription: e.target.value }))}
+  1028→                              placeholder="Best online courses for exam preparation"
+  1029→                              className="h-9 text-sm"
+  1030→                            />
+  1031→                          </div>
+  1032→                        </div>
+  1033→
+  1034→                        <Separator />
+  1035→                        <p className="text-xs font-medium text-gray-700">Social Links</p>
+  1036→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1037→                          {[
+  1038→                            { key: 'whatsapp' as const, label: 'WhatsApp', placeholder: 'https://wa.me/...' },
+  1039→                            { key: 'youtube' as const, label: 'YouTube', placeholder: 'https://youtube.com/...' },
+  1040→                            { key: 'telegram' as const, label: 'Telegram', placeholder: 'https://t.me/...' },
+  1041→                            { key: 'instagram' as const, label: 'Instagram', placeholder: 'https://instagram.com/...' },
+  1042→                            { key: 'twitter' as const, label: 'Twitter / X', placeholder: 'https://x.com/...' },
+  1043→                            { key: 'facebook' as const, label: 'Facebook', placeholder: 'https://facebook.com/...' },
+  1044→                          ].map(({ key, label, placeholder }) => (
+  1045→                            <div key={key} className="space-y-1">
+  1046→                              <Label className="text-[11px] text-gray-600">{label}</Label>
+  1047→                              <Input
+  1048→                                value={config.socialLinks[key] || ''}
+  1049→                                onChange={e => updateSocialLink(key, e.target.value)}
+  1050→                                placeholder={placeholder}
+  1051→                                className="h-8 text-xs"
+  1052→                              />
+  1053→                            </div>
+  1054→                          ))}
+  1055→                        </div>
+  1056→                      </CardContent>
+  1057→                    </Card>
+  1058→
+  1059→                    {/* Advanced */}
+  1060→                    <Card className="bg-white shadow-sm rounded-xl">
+  1061→                      <CardHeader className="pb-3">
+  1062→                        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1063→                          <Code2 className="size-4 text-amber-600" />
+  1064→                          Advanced Settings
+  1065→                        </CardTitle>
+  1066→                      </CardHeader>
+  1067→                      <CardContent className="space-y-4">
+  1068→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1069→                          <div className="space-y-1.5">
+  1070→                            <Label className="text-xs font-medium text-gray-700">Template</Label>
+  1071→                            <Select value={config.templateId} onValueChange={v => setConfig(prev => ({ ...prev, templateId: v }))}>
+  1072→                              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+  1073→                              <SelectContent>
+  1074→                                {TEMPLATE_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+  1075→                              </SelectContent>
+  1076→                            </Select>
+  1077→                          </div>
+  1078→                          <div className="flex items-center gap-3 pt-5">
+  1079→                            <Switch
+  1080→                              checked={config.pwaEnabled}
+  1081→                              onCheckedChange={v => setConfig(prev => ({ ...prev, pwaEnabled: v }))}
+  1082→                            />
+  1083→                            <Label className="text-sm text-gray-700">Enable PWA</Label>
+  1084→                          </div>
+  1085→                        </div>
+  1086→                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1087→                          <div className="space-y-1.5">
+  1088→                            <Label className="text-xs font-medium text-gray-700">Google Analytics ID</Label>
+  1089→                            <Input
+  1090→                              value={config.analyticsId}
+  1091→                              onChange={e => setConfig(prev => ({ ...prev, analyticsId: e.target.value }))}
+  1092→                              placeholder="G-XXXXXXXXXX"
+  1093→                              className="h-9 text-sm font-mono"
+  1094→                            />
+  1095→                          </div>
+  1096→                          <div className="space-y-1.5">
+  1097→                            <Label className="text-xs font-medium text-gray-700">Facebook Pixel ID</Label>
+  1098→                            <Input
+  1099→                              value={config.facebookPixelId}
+  1100→                              onChange={e => setConfig(prev => ({ ...prev, facebookPixelId: e.target.value }))}
+  1101→                              placeholder="Pixel ID"
+  1102→                              className="h-9 text-sm font-mono"
+  1103→                            />
+  1104→                          </div>
+  1105→                        </div>
+  1106→                        <div className="space-y-1.5">
+  1107→                          <Label className="text-xs font-medium text-gray-700">Custom CSS</Label>
+  1108→                          <Textarea
+  1109→                            value={config.customCSS}
+  1110→                            onChange={e => setConfig(prev => ({ ...prev, customCSS: e.target.value }))}
+  1111→                            placeholder="/* Custom styles */&#10;.hero { padding: 2rem; }"
+  1112→                            className="text-xs font-mono min-h-[100px]"
+  1113→                          />
+  1114→                        </div>
+  1115→                      </CardContent>
+  1116→                    </Card>
+  1117→
+  1118→                    {/* Save Button */}
+  1119→                    <div className="flex justify-end">
+  1120→                      <Button
+  1121→                        onClick={handleSaveConfig}
+  1122→                        disabled={savingConfig}
+  1123→                        className="bg-amber-600 hover:bg-amber-700 text-white gap-2 min-w-[140px]"
+  1124→                      >
+  1125→                        {savingConfig ? (
+  1126→                          <>
+  1127→                            <Loader2 className="size-4 animate-spin" />
+  1128→                            Saving...
+  1129→                          </>
+  1130→                        ) : (
+  1131→                          <>
+  1132→                            <Save className="size-4" />
+  1133→                            Save Config
+  1134→                          </>
+  1135→                        )}
+  1136→                      </Button>
+  1137→                    </div>
+  1138→                  </div>
+  1139→
+  1140→                  {/* Live Preview */}
+  1141→                  <div className="lg:col-span-1">
+  1142→                    <div className="sticky top-6">
+  1143→                      <LivePreviewCard config={config} />
+  1144→                    </div>
+  1145→                  </div>
+  1146→                </div>
+  1147→              )}
+  1148→            </TabsContent>
+  1149→
+  1150→            {/* ─── DOMAINS TAB ────────────────────────────────────────────── */}
+  1151→            <TabsContent value="domains" className="space-y-4 mt-4">
+  1152→              {/* Add Domain Form */}
+  1153→              <Card className="bg-white shadow-sm rounded-xl">
+  1154→                <CardHeader className="pb-3">
+  1155→                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1156→                    <Plus className="size-4 text-amber-600" />
+  1157→                    Add Custom Domain
+  1158→                  </CardTitle>
+  1159→                </CardHeader>
+  1160→                <CardContent>
+  1161→                  <div className="flex flex-col sm:flex-row gap-3">
+  1162→                    <div className="flex-1 space-y-1.5">
+  1163→                      <Label className="text-xs font-medium text-gray-700">Domain</Label>
+  1164→                      <Input
+  1165→                        value={newDomain}
+  1166→                        onChange={e => setNewDomain(e.target.value)}
+  1167→                        placeholder="courses.teachername.com"
+  1168→                        className="h-9 text-sm"
+  1169→                      />
+  1170→                    </div>
+  1171→                    <div className="w-full sm:w-48 space-y-1.5">
+  1172→                      <Label className="text-xs font-medium text-gray-700">Target Type</Label>
+  1173→                      <Select value={newDomainTarget} onValueChange={setNewDomainTarget}>
+  1174→                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+  1175→                        <SelectContent>
+  1176→                          <SelectItem value="website">Website</SelectItem>
+  1177→                          <SelectItem value="app_web">App (Web)</SelectItem>
+  1178→                        </SelectContent>
+  1179→                      </Select>
+  1180→                    </div>
+  1181→                    <div className="flex items-end">
+  1182→                      <Button
+  1183→                        onClick={handleAddDomain}
+  1184→                        disabled={addingDomain || !newDomain.trim()}
+  1185→                        className="bg-amber-600 hover:bg-amber-700 text-white gap-2 h-9"
+  1186→                      >
+  1187→                        {addingDomain ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+  1188→                        Add
+  1189→                      </Button>
+  1190→                    </div>
+  1191→                  </div>
+  1192→                </CardContent>
+  1193→              </Card>
+  1194→
+  1195→              {/* Domains Table */}
+  1196→              <Card className="bg-white shadow-sm rounded-xl">
+  1197→                <CardHeader className="pb-3">
+  1198→                  <div className="flex items-center justify-between">
+  1199→                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+  1200→                      <Globe className="size-4 text-amber-600" />
+  1201→                      Custom Domains
+  1202→                    </CardTitle>
+  1203→                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-0 text-[10px]">
+  1204→                      {domains.length} domain{domains.length !== 1 ? 's' : ''}
+  1205→                    </Badge>
+  1206→                  </div>
+  1207→                </CardHeader>
+  1208→                <CardContent className="px-0 pb-0">
+  1209→                  {domainsLoading ? (
+  1210→                    <div className="space-y-3 px-6 pb-4">
+  1211→                      {Array.from({ length: 3 }).map((_, i) => (
+  1212→                        <div key={i} className="flex items-center gap-4">
+  1213→                          <Skeleton className="size-8 rounded-lg shrink-0" />
+  1214→                          <Skeleton className="h-4 w-48" />
+  1215→                          <Skeleton className="h-5 w-16 rounded-full" />
+  1216→                          <Skeleton className="h-4 w-20 ml-auto" />
+  1217→                        </div>
+  1218→                      ))}
+  1219→                    </div>
+  1220→                  ) : domains.length === 0 ? (
+  1221→                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+  1222→                      <Globe className="size-10 text-gray-300 mb-3" />
+  1223→                      <p className="text-sm font-medium text-gray-500">No custom domains yet</p>
+  1224→                      <p className="text-xs text-muted-foreground mt-1">Add a domain above to get started</p>
+  1225→                    </div>
+  1226→                  ) : (
+  1227→                    <div className="overflow-x-auto">
+  1228→                      <Table>
+  1229→                        <TableHeader>
+  1230→                          <TableRow className="border-b border-gray-100 hover:bg-transparent">
+  1231→                            <TableHead className="text-xs font-medium text-muted-foreground">Domain</TableHead>
+  1232→                            <TableHead className="text-xs font-medium text-muted-foreground">Target</TableHead>
+  1233→                            <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+  1234→                            <TableHead className="text-xs font-medium text-muted-foreground">SSL</TableHead>
+  1235→                            <TableHead className="text-xs font-medium text-muted-foreground">Verified</TableHead>
+  1236→                            <TableHead className="text-xs font-medium text-muted-foreground text-right">Actions</TableHead>
+  1237→                          </TableRow>
+  1238→                        </TableHeader>
+  1239→                        <TableBody>
+  1240→                          {domains.map(domain => (
+  1241→                            <TableRow key={domain.id} className="border-b border-gray-50">
+  1242→                              <TableCell className="text-sm font-medium">
+  1243→                                <div className="flex items-center gap-2">
+  1244→                                  <Globe className="size-3.5 text-muted-foreground" />
+  1245→                                  {domain.domain}
+  1246→                                </div>
+  1247→                              </TableCell>
+  1248→                              <TableCell className="text-xs text-muted-foreground">
+  1249→                                {domain.targetType === 'website' ? 'Website' : 'App (Web)'}
+  1250→                              </TableCell>
+  1251→                              <TableCell>{getStatusBadge(domain.status)}</TableCell>
+  1252→                              <TableCell>
+  1253→                                {domain.sslEnabled ? (
+  1254→                                  <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 border-0 text-[11px]">
+  1255→                                    <Lock className="size-3 mr-1" /> SSL
+  1256→                                  </Badge>
+  1257→                                ) : (
+  1258→                                  <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100 border-0 text-[11px]">
+  1259→                                    <Unlock className="size-3 mr-1" /> No SSL
+  1260→                                  </Badge>
+  1261→                                )}
+  1262→                              </TableCell>
+  1263→                              <TableCell className="text-xs text-muted-foreground">
+  1264→                                {domain.dnsVerifiedAt ? formatDate(domain.dnsVerifiedAt) : '—'}
+  1265→                              </TableCell>
+  1266→                              <TableCell className="text-right">
+  1267→                                <div className="flex items-center justify-end gap-1.5">
+  1268→                                  {domain.status !== 'active' && (
+  1269→                                    <Button
+  1270→                                      variant="outline"
+  1271→                                      size="sm"
+  1272→                                      onClick={() => handleVerifyDomain(domain.id)}
+  1273→                                      className="h-7 text-[11px] gap-1 border-amber-200 text-amber-700 hover:bg-amber-50"
+  1274→                                    >
+  1275→                                      <Shield className="size-3" /> Verify
+  1276→                                    </Button>
+  1277→                                  )}
+  1278→                                  <Button
+  1279→                                    variant="ghost"
+  1280→                                    size="sm"
+  1281→                                    onClick={() => setDeleteDomainId(domain.id)}
+  1282→                                    className="h-7 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700 gap-1"
+  1283→                                  >
+  1284→                                    <Trash2 className="size-3" /> Delete
+  1285→                                  </Button>
+  1286→                                </div>
+  1287→                              </TableCell>
+  1288→                            </TableRow>
+  1289→                          ))}
+  1290→                        </TableBody>
+  1291→                      </Table>
+  1292→                    </div>
+  1293→                  )}
+  1294→                </CardContent>
+  1295→              </Card>
+  1296→
+  1297→              {/* DNS Instructions */}
+  1298→              <Card className="bg-white shadow-sm rounded-xl border-l-4 border-l-sky-400">
+  1299→                <CardContent className="p-4">
+  1300→                  <div className="flex items-start gap-3">
+  1301→                    <Info className="size-5 text-sky-500 shrink-0 mt-0.5" />
+  1302→                    <div className="space-y-2">
+  1303→                      <p className="text-sm font-medium text-gray-900">DNS Configuration Instructions</p>
+  1304→                      <p className="text-xs text-muted-foreground">
+  1305→                        To point your custom domain to our platform, add the following DNS record with your domain registrar:
+  1306→                      </p>
+  1307→                      <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs space-y-1">
+  1308→                        <div className="flex items-center gap-2">
+  1309→                          <span className="text-muted-foreground w-16">Type:</span>
+  1310→                          <span className="font-semibold">CNAME</span>
+  1311→                        </div>
+  1312→                        <div className="flex items-center gap-2">
+  1313→                          <span className="text-muted-foreground w-16">Name:</span>
+  1314→                          <span className="font-semibold">courses</span>
+  1315→                          <span className="text-muted-foreground">(or your subdomain)</span>
+  1316→                        </div>
+  1317→                        <div className="flex items-center gap-2">
+  1318→                          <span className="text-muted-foreground w-16">Value:</span>
+  1319→                          <span className="font-semibold">cname.yourplatform.com</span>
+  1320→                        </div>
+  1321→                      </div>
+  1322→                      <p className="text-[11px] text-muted-foreground">
+  1323→                        After adding the CNAME record, click &ldquo;Verify&rdquo; to check DNS propagation. SSL certificates are automatically provisioned after verification.
+  1324→                      </p>
+  1325→                    </div>
+  1326→                  </div>
+  1327→                </CardContent>
+  1328→              </Card>
+  1329→
+  1330→              {/* Delete Domain Dialog */}
+  1331→              <AlertDialog open={!!deleteDomainId} onOpenChange={() => setDeleteDomainId(null)}>
+  1332→                <AlertDialogContent>
+  1333→                  <AlertDialogHeader>
+  1334→                    <AlertDialogTitle>Remove Domain</AlertDialogTitle>
+  1335→                    <AlertDialogDescription>
+  1336→                      Are you sure you want to remove this domain? This will also remove any SSL certificates associated with it.
+  1337→                    </AlertDialogDescription>
+  1338→                  </AlertDialogHeader>
+  1339→                  <AlertDialogFooter>
+  1340→                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1341→                    <AlertDialogAction onClick={handleDeleteDomain} className="bg-red-600 hover:bg-red-700 text-white">
+  1342→                      Remove Domain
+  1343→                    </AlertDialogAction>
+  1344→                  </AlertDialogFooter>
+  1345→                </AlertDialogContent>
+  1346→              </AlertDialog>
+  1347→            </TabsContent>
+  1348→
+  1349→            {/* ─── BUILD HISTORY TAB ──────────────────────────────────────── */}
+  1350→            <TabsContent value="builds" className="space-y-4 mt-4">
+  1351→              {/* Build action */}
+  1352→              <div className="flex items-center justify-between">
+  1353→                <div className="flex items-center gap-2">
+  1354→                  <FileArchive className="size-4 text-amber-600" />
+  1355→                  <span className="text-sm font-medium text-gray-700">
+  1356→                    {builds.length} build{builds.length !== 1 ? 's' : ''}
+  1357→                  </span>
+  1358→                </div>
+  1359→                <Button
+  1360→                  onClick={() => setBuildDialogOpen(true)}
+  1361→                  className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+  1362→                  disabled={!selectedTeacherId}
+  1363→                >
+  1364→                  <Plus className="size-4" />
+  1365→                  Generate New Build
+  1366→                </Button>
+  1367→              </div>
+  1368→
+  1369→              {/* Build History Table */}
+  1370→              <Card className="bg-white shadow-sm rounded-xl">
+  1371→                <CardContent className="px-0 pb-0">
+  1372→                  {buildsLoading ? (
+  1373→                    <div className="space-y-3 px-6 py-4">
+  1374→                      {Array.from({ length: 3 }).map((_, i) => (
+  1375→                        <div key={i} className="flex items-center gap-4">
+  1376→                          <Skeleton className="size-8 rounded-lg shrink-0" />
+  1377→                          <Skeleton className="h-4 w-36" />
+  1378→                          <Skeleton className="h-5 w-16 rounded-full" />
+  1379→                          <Skeleton className="h-4 w-20 ml-auto" />
+  1380→                        </div>
+  1381→                      ))}
+  1382→                    </div>
+  1383→                  ) : builds.length === 0 ? (
+  1384→                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+  1385→                      <Hammer className="size-10 text-gray-300 mb-3" />
+  1386→                      <p className="text-sm font-medium text-gray-500">No builds yet</p>
+  1387→                      <p className="text-xs text-muted-foreground mt-1">Generate your first build to get started</p>
+  1388→                    </div>
+  1389→                  ) : (
+  1390→                    <ScrollArea className="max-h-96">
+  1391→                      <Table>
+  1392→                        <TableHeader>
+  1393→                          <TableRow className="border-b border-gray-100 hover:bg-transparent">
+  1394→                            <TableHead className="text-xs font-medium text-muted-foreground">Date</TableHead>
+  1395→                            <TableHead className="text-xs font-medium text-muted-foreground">Type</TableHead>
+  1396→                            <TableHead className="text-xs font-medium text-muted-foreground">Version</TableHead>
+  1397→                            <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+  1398→                            <TableHead className="text-xs font-medium text-muted-foreground">Size</TableHead>
+  1399→                            <TableHead className="text-xs font-medium text-muted-foreground">Triggered By</TableHead>
+  1400→                            <TableHead className="text-xs font-medium text-muted-foreground text-right">Actions</TableHead>
+  1401→                          </TableRow>
+  1402→                        </TableHeader>
+  1403→                        <TableBody>
+  1404→                          <AnimatePresence>
+  1405→                            {builds.map(build => {
+  1406→                              const TypeIcon = build.type === 'website' ? Globe : Smartphone
+  1407→                              return (
+  1408→                                <motion.tr
+  1409→                                  key={build.id}
+  1410→                                  initial={{ opacity: 0, x: -8 }}
+  1411→                                  animate={{ opacity: 1, x: 0 }}
+  1412→                                  exit={{ opacity: 0, x: 8 }}
+  1413→                                  className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+  1414→                                >
+  1415→                                  <TableCell className="text-xs text-muted-foreground py-3">
+  1416→                                    <div className="flex items-center gap-2">
+  1417→                                      <Clock className="size-3 text-gray-400" />
+  1418→                                      {formatDate(build.createdAt)}
+  1419→                                    </div>
+  1420→                                  </TableCell>
+  1421→                                  <TableCell>
+  1422→                                    <div className="flex items-center gap-1.5">
+  1423→                                      <TypeIcon className="size-3.5 text-muted-foreground" />
+  1424→                                      <span className="text-xs font-medium">{getBuildTypeLabel(build.type)}</span>
+  1425→                                    </div>
+  1426→                                  </TableCell>
+  1427→                                  <TableCell className="text-xs font-mono text-muted-foreground">
+  1428→                                    v{build.version}
+  1429→                                  </TableCell>
+  1430→                                  <TableCell>{getStatusBadge(build.status)}</TableCell>
+  1431→                                  <TableCell className="text-xs text-muted-foreground">
+  1432→                                    {formatFileSize(build.fileSize)}
+  1433→                                  </TableCell>
+  1434→                                  <TableCell className="text-xs text-muted-foreground">
+  1435→                                    {build.triggeredByName || '—'}
+  1436→                                  </TableCell>
+  1437→                                  <TableCell className="text-right">
+  1438→                                    {build.status === 'completed' ? (
+  1439→                                      <Button
+  1440→                                        variant="outline"
+  1441→                                        size="sm"
+  1442→                                        className="h-7 text-[11px] gap-1 border-amber-200 text-amber-700 hover:bg-amber-50"
+  1443→                                        onClick={() => {
+  1444→                                          toast.success('Download started', { description: build.filename || 'build.zip' })
+  1445→                                        }}
+  1446→                                      >
+  1447→                                        <ArrowDownToLine className="size-3" /> Download
+  1448→                                      </Button>
+  1449→                                    ) : build.status === 'pending' || build.status === 'generating' ? (
+  1450→                                      <div className="flex items-center gap-1.5 text-xs text-amber-600 justify-end">
+  1451→                                        <Loader2 className="size-3.5 animate-spin" />
+  1452→                                        <span>Processing...</span>
+  1453→                                      </div>
+  1454→                                    ) : build.status === 'failed' ? (
+  1455→                                      <span className="text-[11px] text-red-500">{build.error || 'Failed'}</span>
+  1456→                                    ) : null}
+  1457→                                  </TableCell>
+  1458→                                </motion.tr>
+  1459→                              )
+  1460→                            })}
+  1461→                          </AnimatePresence>
+  1462→                        </TableBody>
+  1463→                      </Table>
+  1464→                    </ScrollArea>
+  1465→                  )}
+  1466→                </CardContent>
+  1467→              </Card>
+  1468→
+  1469→              {/* Build Dialog */}
+  1470→              <Dialog open={buildDialogOpen} onOpenChange={setBuildDialogOpen}>
+  1471→                <DialogContent className="sm:max-w-[480px]">
+  1472→                  <DialogHeader>
+  1473→                    <DialogTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+  1474→                      <Hammer className="size-5 text-amber-600" />
+  1475→                      Generate New Build
+  1476→                    </DialogTitle>
+  1477→                    <DialogDescription>
+  1478→                      Choose a build type and optionally add a changelog.
+  1479→                    </DialogDescription>
+  1480→                  </DialogHeader>
+  1481→                  <div className="space-y-4 py-2">
+  1482→                    <div className="space-y-1.5">
+  1483→                      <Label className="text-xs font-medium text-gray-700">Build Type</Label>
+  1484→                      <Select value={buildType} onValueChange={setBuildType}>
+  1485→                        <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+  1486→                        <SelectContent>
+  1487→                          {BUILD_TYPES.map(bt => (
+  1488→                            <SelectItem key={bt.value} value={bt.value}>
+  1489→                              <span className="flex items-center gap-2">
+  1490→                                <bt.icon className="size-3.5" />
+  1491→                                {bt.label}
+  1492→                              </span>
+  1493→                            </SelectItem>
+  1494→                          ))}
+  1495→                        </SelectContent>
+  1496→                      </Select>
+  1497→                    </div>
+  1498→                    <div className="space-y-1.5">
+  1499→                      <Label className="text-xs font-medium text-gray-700">Changelog (optional)</Label>
+  1500→                      <Textarea
+  1501→                        value={buildChangelog}
+  1502→                        onChange={e => setBuildChangelog(e.target.value)}
+  1503→                        placeholder="What changed in this build?"
+  1504→                        className="text-sm min-h-[80px]"
+  1505→                      />
+  1506→                    </div>
+  1507→                  </div>
+  1508→                  <DialogFooter className="gap-2 sm:gap-0">
+  1509→                    <Button variant="outline" onClick={() => setBuildDialogOpen(false)} disabled={creatingBuild}>
+  1510→                      Cancel
+  1511→                    </Button>
+  1512→                    <Button
+  1513→                      onClick={handleCreateBuild}
+  1514→                      disabled={creatingBuild}
+  1515→                      className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+  1516→                    >
+  1517→                      {creatingBuild ? (
+  1518→                        <>
+  1519→                          <Loader2 className="size-4 animate-spin" />
+  1520→                          Creating...
+  1521→                        </>
+  1522→                      ) : (
+  1523→                        <>
+  1524→                          <Hammer className="size-4" />
+  1525→                          Generate Build
+  1526→                        </>
+  1527→                      )}
+  1528→                    </Button>
+  1529→                  </DialogFooter>
+  1530→                </DialogContent>
+  1531→              </Dialog>
+  1532→            </TabsContent>
+  1533→          </Tabs>
+  1534→        </motion.div>
+  1535→      )}
+  1536→    </div>
+  1537→  )
+  1538→}
+  1539→

@@ -1,0 +1,672 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback, useRef } from 'react'
+     4→     4→import { motion } from 'framer-motion'
+     5→     5→import {
+     6→     6→  Clock,
+     7→     7→  ChevronLeft,
+     8→     8→  ChevronRight,
+     9→     9→  Flag,
+    10→    10→  Loader2,
+    11→    11→  AlertTriangle,
+    12→    12→  CheckCircle2,
+    13→    13→  XCircle,
+    14→    14→  BookmarkCheck,
+    15→    15→  ClipboardList,
+    16→    16→  AlertCircle,
+    17→    17→  RotateCcw,
+    18→    18→} from 'lucide-react'
+    19→    19→import { useAppStore } from '@/lib/store'
+    20→    20→import { apiFetchJSON } from '@/lib/api-client'
+    21→    21→import { Card, CardContent } from '@/components/ui/card'
+    22→    22→import { Button } from '@/components/ui/button'
+    23→    23→import { Badge } from '@/components/ui/badge'
+    24→    24→import {
+    25→    25→  Dialog,
+    26→    26→  DialogContent,
+    27→    27→  DialogDescription,
+    28→    28→  DialogFooter,
+    29→    29→  DialogHeader,
+    30→    30→  DialogTitle,
+    31→    31→} from '@/components/ui/dialog'
+    32→    32→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+    33→    33→import { Label } from '@/components/ui/label'
+    34→    34→import { Checkbox } from '@/components/ui/checkbox'
+    35→    35→import { Input } from '@/components/ui/input'
+    36→    36→import { ScrollArea } from '@/components/ui/scroll-area'
+    37→    37→import { toast } from 'sonner'
+    38→    38→
+    39→    39→interface Question {
+    40→    40→  id: string
+    41→    41→  type: string
+    42→    42→  heading: string | null
+    43→    43→  directive: string | null
+    44→    44→  title: string
+    45→    45→  image1: string | null
+    46→    46→  image2: string | null
+    47→    47→  image3: string | null
+    48→    48→  option1: string | null
+    49→    49→  option2: string | null
+    50→    50→  option3: string | null
+    51→    51→  option4: string | null
+    52→    52→  option5: string | null
+    53→    53→  option1Image: string | null
+    54→    54→  option2Image: string | null
+    55→    55→  option3Image: string | null
+    56→    56→  option4Image: string | null
+    57→    57→  option5Image: string | null
+    58→    58→  correctOption?: string | null
+    59→    59→  section: string | null
+    60→    60→  positiveMarks: number
+    61→    61→  negativeMarks: number
+    62→    62→  sortOrder: number
+    63→    63→}
+    64→    64→
+    65→    65→interface TestData {
+    66→    66→  id: string
+    67→    67→  title: string
+    68→    68→  instructions: string | null
+    69→    69→  totalDuration: number
+    70→    70→  numberOfQuestions: number
+    71→    71→  totalMarks: number
+    72→    72→  isLive: boolean
+    73→    73→  maxAttempts: number
+    74→    74→  negativeMarks: number
+    75→    75→  showSolution: boolean
+    76→    76→  hasInProgress: boolean
+    77→    77→  inProgressAttemptId: string | null
+    78→    78→  questions: Question[]
+    79→    79→}
+    80→    80→
+    81→    81→export default function TakeTest() {
+    82→    82→  const { selectedTestId, setStudentPage, setSelectedAttemptId } = useAppStore()
+    83→    83→  const [test, setTest] = useState<TestData | null>(null)
+    84→    84→  const [loading, setLoading] = useState(true)
+    85→    85→  const [error, setError] = useState<string | null>(null)
+    86→    86→  const [currentQ, setCurrentQ] = useState(0)
+    87→    87→  const [answers, setAnswers] = useState<Record<string, string>>({})
+    88→    88→  const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set())
+    89→    89→  const [timeLeft, setTimeLeft] = useState(0)
+    90→    90→  const [submitting, setSubmitting] = useState(false)
+    91→    91→  const [showConfirm, setShowConfirm] = useState(false)
+    92→    92→  const [showInstructions, setShowInstructions] = useState(true)
+    93→    93→  const [attemptId, setAttemptId] = useState<string | null>(null)
+    94→    94→  const [sidebarOpen, setSidebarOpen] = useState(true)
+    95→    95→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    96→    96→  const answersRef = useRef(answers)
+    97→    97→  answersRef.current = answers
+    98→    98→
+    99→    99→  const load = async () => {
+   100→   100→    if (!selectedTestId) return
+   101→   101→    setLoading(true)
+   102→   102→    setError(null)
+   103→   103→    try {
+   104→   104→      const res = await apiFetchJSON<{ success: boolean; test: TestData }>(
+   105→   105→        `/api/student/tests/${selectedTestId}`
+   106→   106→      )
+   107→   107→      if (res.success) {
+   108→   108→        setTest(res.test)
+   109→   109→        setTimeLeft((res.test.totalDuration || 0) * 60)
+   110→   110→        if (res.test.hasInProgress && res.test.inProgressAttemptId) {
+   111→   111→          setAttemptId(res.test.inProgressAttemptId)
+   112→   112→        }
+   113→   113→      }
+   114→   114→    } catch (err) {
+   115→   115→      console.error('Load test error:', err)
+   116→   116→      setError('Failed to load test. Please try again.')
+   117→   117→    } finally {
+   118→   118→      setLoading(false)
+   119→   119→    }
+   120→   120→  }
+   121→   121→
+   122→   122→  useEffect(() => {
+   123→   123→    load()
+   124→   124→  }, [selectedTestId])
+   125→   125→
+   126→   126→  // Start attempt and timer
+   127→   127→  const handleStartTest = useCallback(async () => {
+   128→   128→    if (!test) return
+   129→   129→    try {
+   130→   130→      if (!attemptId) {
+   131→   131→        const res = await apiFetchJSON<{ success: boolean; attempt: { id: string }; message?: string }>(
+   132→   132→          '/api/student/test-attempts',
+   133→   133→          {
+   134→   134→            method: 'POST',
+   135→   135→            headers: { 'Content-Type': 'application/json' },
+   136→   136→            body: JSON.stringify({ testId: test.id }),
+   137→   137→          }
+   138→   138→        )
+   139→   139→        if (res.success) {
+   140→   140→          setAttemptId(res.attempt.id)
+   141→   141→        } else {
+   142→   142→          toast.error(res.message || 'Failed to start test')
+   143→   143→          return
+   144→   144→        }
+   145→   145→      }
+   146→   146→      setShowInstructions(false)
+   147→   147→      // Start timer
+   148→   148→      timerRef.current = setInterval(() => {
+   149→   149→        setTimeLeft((prev) => {
+   150→   150→          if (prev <= 1) {
+   151→   151→            if (timerRef.current) clearInterval(timerRef.current)
+   152→   152→            // Auto-submit
+   153→   153→            handleSubmit(true)
+   154→   154→            return 0
+   155→   155→          }
+   156→   156→          return prev - 1
+   157→   157→        })
+   158→   158→      }, 1000)
+   159→   159→    } catch (err) {
+   160→   160→      console.error('Start attempt error:', err)
+   161→   161→      toast.error('Failed to start test. Please try again.')
+   162→   162→    }
+   163→   163→  }, [test, attemptId])
+   164→   164→
+   165→   165→  const handleSubmit = useCallback(async (autoSubmit = false) => {
+   166→   166→    if (!autoSubmit && !showConfirm) {
+   167→   167→      setShowConfirm(true)
+   168→   168→      return
+   169→   169→    }
+   170→   170→
+   171→   171→    setSubmitting(true)
+   172→   172→    if (timerRef.current) clearInterval(timerRef.current)
+   173→   173→
+   174→   174→    try {
+   175→   175→      const timeTaken = test ? (test.totalDuration * 60) - timeLeft : 0
+   176→   176→      let currentAttemptId = attemptId
+   177→   177→
+   178→   178→      // If no attempt exists yet, create one first
+   179→   179→      if (!currentAttemptId && test) {
+   180→   180→        const createRes = await apiFetchJSON<{ success: boolean; attempt: { id: string } }>(
+   181→   181→          '/api/student/test-attempts',
+   182→   182→          {
+   183→   183→            method: 'POST',
+   184→   184→            headers: { 'Content-Type': 'application/json' },
+   185→   185→            body: JSON.stringify({ testId: test.id }),
+   186→   186→          }
+   187→   187→        )
+   188→   188→        if (createRes.success && createRes.attempt?.id) {
+   189→   189→          currentAttemptId = createRes.attempt.id
+   190→   190→          setAttemptId(currentAttemptId)
+   191→   191→        } else {
+   192→   192→          toast.error('Failed to create test attempt')
+   193→   193→          return
+   194→   194→        }
+   195→   195→      }
+   196→   196→
+   197→   197→      // Submit the attempt with answers
+   198→   198→      const res = await apiFetchJSON<{ success: boolean; attempt: { id: string } }>(
+   199→   199→        `/api/student/test-attempts/${currentAttemptId}`,
+   200→   200→        {
+   201→   201→          method: 'PUT',
+   202→   202→          headers: { 'Content-Type': 'application/json' },
+   203→   203→          body: JSON.stringify({
+   204→   204→            answers: answersRef.current,
+   205→   205→            timeTaken,
+   206→   206→          }),
+   207→   207→        }
+   208→   208→      )
+   209→   209→      if (res.success) {
+   210→   210→        setSelectedAttemptId(res.attempt?.id || currentAttemptId || '')
+   211→   211→        setStudentPage('test-result')
+   212→   212→      } else {
+   213→   213→        toast.error('Failed to submit test')
+   214→   214→      }
+   215→   215→    } catch (err) {
+   216→   216→      console.error('Submit test error:', err)
+   217→   217→      toast.error('Failed to submit test. Please try again.')
+   218→   218→    } finally {
+   219→   219→      setSubmitting(false)
+   220→   220→      setShowConfirm(false)
+   221→   221→    }
+   222→   222→  }, [test, timeLeft, attemptId, setSelectedAttemptId, setStudentPage, showConfirm])
+   223→   223→
+   224→   224→  // Cleanup timer on unmount
+   225→   225→  useEffect(() => {
+   226→   226→    return () => {
+   227→   227→      if (timerRef.current) clearInterval(timerRef.current)
+   228→   228→    }
+   229→   229→  }, [])
+   230→   230→
+   231→   231→  const selectAnswer = (questionId: string, option: string) => {
+   232→   232→    setAnswers((prev) => ({ ...prev, [questionId]: option }))
+   233→   233→  }
+   234→   234→
+   235→   235→  const toggleMultipleAnswer = (questionId: string, option: string) => {
+   236→   236→    setAnswers((prev) => {
+   237→   237→      const current = prev[questionId] || ''
+   238→   238→      const parts = current ? current.split(',') : []
+   239→   239→      if (parts.includes(option)) {
+   240→   240→        return { ...prev, [questionId]: parts.filter((p) => p !== option).join(',') }
+   241→   241→      }
+   242→   242→      return { ...prev, [questionId]: [...parts, option].join(',') }
+   243→   243→    })
+   244→   244→  }
+   245→   245→
+   246→   246→  const toggleReview = (questionId: string) => {
+   247→   247→    setMarkedForReview((prev) => {
+   248→   248→      const next = new Set(prev)
+   249→   249→      if (next.has(questionId)) next.delete(questionId)
+   250→   250→      else next.add(questionId)
+   251→   251→      return next
+   252→   252→    })
+   253→   253→  }
+   254→   254→
+   255→   255→  const formatTime = (seconds: number) => {
+   256→   256→    const h = Math.floor(seconds / 3600)
+   257→   257→    const m = Math.floor((seconds % 3600) / 60)
+   258→   258→    const s = seconds % 60
+   259→   259→    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+   260→   260→    return `${m}:${String(s).padStart(2, '0')}`
+   261→   261→  }
+   262→   262→
+   263→   263→  if (loading) {
+   264→   264→    return (
+   265→   265→      <div className="flex items-center justify-center min-h-screen">
+   266→   266→        <div className="text-center">
+   267→   267→          <Loader2 className="size-8 animate-spin text-amber-600 mx-auto mb-4" />
+   268→   268→          <p className="text-sm text-gray-500">Loading test...</p>
+   269→   269→        </div>
+   270→   270→      </div>
+   271→   271→    )
+   272→   272→  }
+   273→   273→
+   274→   274→  if (error) {
+   275→   275→    return (
+   276→   276→      <div className="flex items-center justify-center min-h-screen">
+   277→   277→        <div className="text-center max-w-md">
+   278→   278→          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-red-50 mx-auto mb-4">
+   279→   279→            <AlertCircle className="size-8 text-red-500" />
+   280→   280→          </div>
+   281→   281→          <h2 className="text-lg font-semibold text-gray-900 mb-1">Failed to Load Test</h2>
+   282→   282→          <p className="text-gray-500 text-sm mb-4">{error}</p>
+   283→   283→          <Button variant="outline" className="gap-2" onClick={load}>
+   284→   284→            <RotateCcw className="size-4" /> Try Again
+   285→   285→          </Button>
+   286→   286→        </div>
+   287→   287→      </div>
+   288→   288→    )
+   289→   289→  }
+   290→   290→
+   291→   291→  if (!test) {
+   292→   292→    return (
+   293→   293→      <div className="flex items-center justify-center min-h-screen text-gray-400">
+   294→   294→        <div className="text-center">
+   295→   295→          <AlertCircle className="size-12 mx-auto mb-3 opacity-40" />
+   296→   296→          <p className="text-base font-medium">Test not found</p>
+   297→   297→          <Button variant="outline" className="mt-3" onClick={() => setStudentPage('my-tests')}>
+   298→   298→            Go Back
+   299→   299→          </Button>
+   300→   300→        </div>
+   301→   301→      </div>
+   302→   302→    )
+   303→   303→  }
+   304→   304→
+   305→   305→  // Instructions Screen
+   306→   306→  if (showInstructions) {
+   307→   307→    return (
+   308→   308→      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+   309→   309→        <motion.div
+   310→   310→          initial={{ opacity: 0, y: 20 }}
+   311→   311→          animate={{ opacity: 1, y: 0 }}
+   312→   312→          className="space-y-6"
+   313→   313→        >
+   314→   314→          <div className="text-center">
+   315→   315→            <h1 className="text-2xl font-bold text-gray-900 mb-2">{test.title}</h1>
+   316→   316→            <p className="text-gray-500">Please read the instructions carefully before starting</p>
+   317→   317→          </div>
+   318→   318→
+   319→   319→          <Card className="py-0">
+   320→   320→            <CardContent className="p-5 space-y-4">
+   321→   321→              <div className="grid grid-cols-2 gap-3 text-sm">
+   322→   322→                <div className="flex items-center gap-2 text-gray-600">
+   323→   323→                  <Clock className="size-4 text-amber-600" />
+   324→   324→                  Duration: {test.totalDuration} min
+   325→   325→                </div>
+   326→   326→                <div className="flex items-center gap-2 text-gray-600">
+   327→   327→                  <ClipboardList className="size-4 text-amber-600" />
+   328→   328→                  Questions: {test.numberOfQuestions}
+   329→   329→                </div>
+   330→   330→                <div className="flex items-center gap-2 text-gray-600">
+   331→   331→                  Total Marks: {test.totalMarks}
+   332→   332→                </div>
+   333→   333→                {test.negativeMarks > 0 && (
+   334→   334→                  <div className="flex items-center gap-2 text-red-500">
+   335→   335→                    Negative Marks: -{test.negativeMarks}
+   336→   336→                  </div>
+   337→   337→                )}
+   338→   338→              </div>
+   339→   339→              {attemptId && (
+   340→   340→                <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 text-amber-700 text-sm">
+   341→   341→                  <AlertTriangle className="size-4 shrink-0" />
+   342→   342→                  <span>You have an in-progress attempt. Click Start to resume.</span>
+   343→   343→                </div>
+   344→   344→              )}
+   345→   345→              {test.instructions && (
+   346→   346→                <div className="text-sm text-gray-600 whitespace-pre-wrap border-t pt-4">
+   347→   347→                  {test.instructions}
+   348→   348→                </div>
+   349→   349→              )}
+   350→   350→            </CardContent>
+   351→   351→          </Card>
+   352→   352→
+   353→   353→          <div className="flex gap-3">
+   354→   354→            <Button
+   355→   355→              variant="outline"
+   356→   356→              className="flex-1"
+   357→   357→              onClick={() => setStudentPage('my-tests')}
+   358→   358→            >
+   359→   359→              Go Back
+   360→   360→            </Button>
+   361→   361→            <Button
+   362→   362→              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-lg py-6"
+   363→   363→              onClick={handleStartTest}
+   364→   364→            >
+   365→   365→              {attemptId ? 'Resume Test' : 'Start Test'}
+   366→   366→            </Button>
+   367→   367→          </div>
+   368→   368→        </motion.div>
+   369→   369→      </div>
+   370→   370→    )
+   371→   371→  }
+   372→   372→
+   373→   373→  const questions = test.questions
+   374→   374→  const question = questions[currentQ]
+   375→   375→  const isWarning = timeLeft <= 300 && timeLeft > 60
+   376→   376→  const isDanger = timeLeft <= 60
+   377→   377→
+   378→   378→  return (
+   379→   379→    <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col">
+   380→   380→      {/* Top Bar */}
+   381→   381→      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0">
+   382→   382→        <div className="flex items-center gap-3 min-w-0">
+   383→   383→          <h2 className="text-sm font-semibold text-gray-900 truncate">{test.title}</h2>
+   384→   384→        </div>
+   385→   385→        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold ${
+   386→   386→          isDanger ? 'bg-red-50 text-red-600 animate-pulse' :
+   387→   387→          isWarning ? 'bg-amber-50 text-amber-600' :
+   388→   388→          'bg-gray-100 text-gray-700'
+   389→   389→        }`}>
+   390→   390→          <Clock className="size-4" />
+   391→   391→          {formatTime(timeLeft)}
+   392→   392→        </div>
+   393→   393→        <div className="flex items-center gap-2">
+   394→   394→          <Badge variant="secondary" className="text-xs">
+   395→   395→            {Object.keys(answers).length}/{questions.length} answered
+   396→   396→          </Badge>
+   397→   397→          <Button
+   398→   398→            variant="destructive"
+   399→   399→            size="sm"
+   400→   400→            onClick={() => handleSubmit(false)}
+   401→   401→            disabled={submitting}
+   402→   402→          >
+   403→   403→            {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Submit'}
+   404→   404→          </Button>
+   405→   405→        </div>
+   406→   406→      </div>
+   407→   407→
+   408→   408→      <div className="flex flex-1 overflow-hidden">
+   409→   409→        {/* Question Navigation Sidebar - desktop */}
+   410→   410→        {sidebarOpen && (
+   411→   411→          <div className="hidden md:block w-64 border-r border-gray-200 bg-white overflow-y-auto">
+   412→   412→            <div className="p-3">
+   413→   413→              <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Questions</p>
+   414→   414→              <div className="grid grid-cols-5 gap-1.5">
+   415→   415→                {questions.map((q, idx) => {
+   416→   416→                  const isAnswered = !!answers[q.id]
+   417→   417→                  const isReview = markedForReview.has(q.id)
+   418→   418→                  const isCurrent = idx === currentQ
+   419→   419→                  return (
+   420→   420→                    <button
+   421→   421→                      key={q.id}
+   422→   422→                      onClick={() => setCurrentQ(idx)}
+   423→   423→                      className={`w-full aspect-square rounded-lg text-xs font-medium flex items-center justify-center transition-all ${
+   424→   424→                        isCurrent ? 'ring-2 ring-amber-500' :
+   425→   425→                        isReview ? 'bg-violet-100 text-violet-700' :
+   426→   426→                        isAnswered ? 'bg-emerald-100 text-emerald-700' :
+   427→   427→                        'bg-gray-100 text-gray-600 hover:bg-gray-200'
+   428→   428→                      }`}
+   429→   429→                    >
+   430→   430→                      {idx + 1}
+   431→   431→                    </button>
+   432→   432→                  )
+   433→   433→                })}
+   434→   434→              </div>
+   435→   435→              <div className="mt-4 space-y-1.5 text-xs text-gray-500">
+   436→   436→                <div className="flex items-center gap-2">
+   437→   437→                  <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /> Answered
+   438→   438→                </div>
+   439→   439→                <div className="flex items-center gap-2">
+   440→   440→                  <div className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /> Marked for Review
+   441→   441→                </div>
+   442→   442→                <div className="flex items-center gap-2">
+   443→   443→                  <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300" /> Not Answered
+   444→   444→                </div>
+   445→   445→              </div>
+   446→   446→            </div>
+   447→   447→          </div>
+   448→   448→        )}
+   449→   449→
+   450→   450→        {/* Main Question Area */}
+   451→   451→        <div className="flex-1 overflow-y-auto">
+   452→   452→          <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
+   453→   453→            {/* Question Header */}
+   454→   454→            <div className="flex items-center justify-between">
+   455→   455→              <div className="flex items-center gap-2">
+   456→   456→                <span className="text-sm font-bold text-amber-600">Question {currentQ + 1}</span>
+   457→   457→                <span className="text-sm text-gray-400">of {questions.length}</span>
+   458→   458→                {question.section && (
+   459→   459→                  <Badge variant="secondary" className="text-xs">{question.section}</Badge>
+   460→   460→                )}
+   461→   461→              </div>
+   462→   462→              <div className="flex items-center gap-2">
+   463→   463→                <span className="text-xs text-gray-500">
+   464→   464→                  +{question.positiveMarks} {question.negativeMarks > 0 ? `/ -${question.negativeMarks}` : ''}
+   465→   465→                </span>
+   466→   466→                <Button
+   467→   467→                  variant={markedForReview.has(question.id) ? 'default' : 'outline'}
+   468→   468→                  size="sm"
+   469→   469→                  className={markedForReview.has(question.id) ? 'bg-violet-600 hover:bg-violet-700 text-white' : ''}
+   470→   470→                  onClick={() => toggleReview(question.id)}
+   471→   471→                >
+   472→   472→                  <BookmarkCheck className="size-3.5 mr-1" />
+   473→   473→                  {markedForReview.has(question.id) ? 'Marked' : 'Mark'}
+   474→   474→                </Button>
+   475→   475→              </div>
+   476→   476→            </div>
+   477→   477→
+   478→   478→            {/* Question */}
+   479→   479→            <Card className="py-0">
+   480→   480→              <CardContent className="p-5 sm:p-6">
+   481→   481→                {question.heading && (
+   482→   482→                  <p className="text-sm font-medium text-amber-700 mb-2">{question.heading}</p>
+   483→   483→                )}
+   484→   484→                {question.directive && (
+   485→   485→                  <p className="text-xs text-gray-500 mb-3">{question.directive}</p>
+   486→   486→                )}
+   487→   487→                <p className="text-base text-gray-900 leading-relaxed whitespace-pre-wrap">{question.title}</p>
+   488→   488→
+   489→   489→                {/* Options */}
+   490→   490→                <div className="mt-5 space-y-3">
+   491→   491→                  {question.type === 'mcq' || question.type === 'assertion_reason' || question.type === 'true_false' ? (
+   492→   492→                    <RadioGroup
+   493→   493→                      value={answers[question.id] || ''}
+   494→   494→                      onValueChange={(val) => selectAnswer(question.id, val)}
+   495→   495→                    >
+   496→   496→                      {['1', '2', '3', '4', '5'].map((num) => {
+   497→   497→                        const text = (question as any)[`option${num}`]
+   498→   498→                        if (!text) return null
+   499→   499→                        return (
+   500→   500→                          <div key={num} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-amber-200 hover:bg-amber-50/30 transition-colors cursor-pointer">
+   501→   501→                            <RadioGroupItem value={num} id={`q${question.id}-${num}`} />
+   502→   502→                            <Label htmlFor={`q${question.id}-${num}`} className="flex-1 cursor-pointer text-sm text-gray-800">
+   503→   503→                              {text}
+   504→   504→                            </Label>
+   505→   505→                          </div>
+   506→   506→                        )
+   507→   507→                      })}
+   508→   508→                    </RadioGroup>
+   509→   509→                  ) : question.type === 'multiple_correct' ? (
+   510→   510→                    <div className="space-y-3">
+   511→   511→                      {['1', '2', '3', '4', '5'].map((num) => {
+   512→   512→                        const text = (question as any)[`option${num}`]
+   513→   513→                        if (!text) return null
+   514→   514→                        const selected = (answers[question.id] || '').split(',').includes(num)
+   515→   515→                        return (
+   516→   516→                          <div
+   517→   517→                            key={num}
+   518→   518→                            className={`flex items-center gap-3 p-3 rounded-xl border transition-colors cursor-pointer ${
+   519→   519→                              selected ? 'border-amber-300 bg-amber-50/50' : 'border-gray-100 hover:border-amber-200'
+   520→   520→                            }`}
+   521→   521→                            onClick={() => toggleMultipleAnswer(question.id, num)}
+   522→   522→                          >
+   523→   523→                            <Checkbox checked={selected} />
+   524→   524→                            <span className="text-sm text-gray-800">{text}</span>
+   525→   525→                          </div>
+   526→   526→                        )
+   527→   527→                      })}
+   528→   528→                    </div>
+   529→   529→                  ) : question.type === 'numerical' ? (
+   530→   530→                    <div className="mt-3">
+   531→   531→                      <Input
+   532→   532→                        type="number"
+   533→   533→                        placeholder="Enter your answer"
+   534→   534→                        value={answers[question.id] || ''}
+   535→   535→                        onChange={(e) => selectAnswer(question.id, e.target.value)}
+   536→   536→                        className="max-w-xs"
+   537→   537→                      />
+   538→   538→                    </div>
+   539→   539→                  ) : (
+   540→   540→                    <RadioGroup
+   541→   541→                      value={answers[question.id] || ''}
+   542→   542→                      onValueChange={(val) => selectAnswer(question.id, val)}
+   543→   543→                    >
+   544→   544→                      {['1', '2', '3', '4', '5'].map((num) => {
+   545→   545→                        const text = (question as any)[`option${num}`]
+   546→   546→                        if (!text) return null
+   547→   547→                        return (
+   548→   548→                          <div key={num} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-amber-200 transition-colors cursor-pointer">
+   549→   549→                            <RadioGroupItem value={num} id={`q${question.id}-${num}`} />
+   550→   550→                            <Label htmlFor={`q${question.id}-${num}`} className="flex-1 cursor-pointer text-sm text-gray-800">
+   551→   551→                              {text}
+   552→   552→                            </Label>
+   553→   553→                          </div>
+   554→   554→                        )
+   555→   555→                      })}
+   556→   556→                    </RadioGroup>
+   557→   557→                  )}
+   558→   558→                </div>
+   559→   559→
+   560→   560→                {/* Clear Answer */}
+   561→   561→                {answers[question.id] && (
+   562→   562→                  <Button
+   563→   563→                    variant="ghost"
+   564→   564→                    size="sm"
+   565→   565→                    className="mt-3 text-gray-500"
+   566→   566→                    onClick={() => setAnswers((prev) => {
+   567→   567→                      const next = { ...prev }
+   568→   568→                      delete next[question.id]
+   569→   569→                      return next
+   570→   570→                    })}
+   571→   571→                  >
+   572→   572→                    Clear Answer
+   573→   573→                  </Button>
+   574→   574→                )}
+   575→   575→              </CardContent>
+   576→   576→            </Card>
+   577→   577→
+   578→   578→            {/* Navigation */}
+   579→   579→            <div className="flex items-center justify-between">
+   580→   580→              <Button
+   581→   581→                variant="outline"
+   582→   582→                onClick={() => setCurrentQ(Math.max(0, currentQ - 1))}
+   583→   583→                disabled={currentQ === 0}
+   584→   584→              >
+   585→   585→                <ChevronLeft className="size-4 mr-1" />
+   586→   586→                Previous
+   587→   587→              </Button>
+   588→   588→              <span className="text-sm text-gray-400">
+   589→   589→                {currentQ + 1} / {questions.length}
+   590→   590→              </span>
+   591→   591→              <Button
+   592→   592→                variant="outline"
+   593→   593→                onClick={() => setCurrentQ(Math.min(questions.length - 1, currentQ + 1))}
+   594→   594→                disabled={currentQ === questions.length - 1}
+   595→   595→              >
+   596→   596→                Next
+   597→   597→                <ChevronRight className="size-4 ml-1" />
+   598→   598→              </Button>
+   599→   599→            </div>
+   600→   600→          </div>
+   601→   601→        </div>
+   602→   602→      </div>
+   603→   603→
+   604→   604→      {/* Mobile Question Nav */}
+   605→   605→      <div className="md:hidden border-t border-gray-200 bg-white p-3">
+   606→   606→        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+   607→   607→          {questions.map((q, idx) => {
+   608→   608→            const isAnswered = !!answers[q.id]
+   609→   609→            const isCurrent = idx === currentQ
+   610→   610→            return (
+   611→   611→              <button
+   612→   612→                key={q.id}
+   613→   613→                onClick={() => setCurrentQ(idx)}
+   614→   614→                className={`w-8 h-8 rounded-lg text-xs font-medium flex items-center justify-center shrink-0 ${
+   615→   615→                  isCurrent ? 'bg-amber-600 text-white' :
+   616→   616→                  isAnswered ? 'bg-emerald-100 text-emerald-700' :
+   617→   617→                  'bg-gray-100 text-gray-600'
+   618→   618→                }`}
+   619→   619→              >
+   620→   620→                {idx + 1}
+   621→   621→              </button>
+   622→   622→            )
+   623→   623→          })}
+   624→   624→        </div>
+   625→   625→      </div>
+   626→   626→
+   627→   627→      {/* Submit Confirmation Dialog */}
+   628→   628→      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+   629→   629→        <DialogContent>
+   630→   630→          <DialogHeader>
+   631→   631→            <DialogTitle>Submit Test?</DialogTitle>
+   632→   632→            <DialogDescription>
+   633→   633→              Are you sure you want to submit the test? This action cannot be undone.
+   634→   634→            </DialogDescription>
+   635→   635→          </DialogHeader>
+   636→   636→          <div className="space-y-2 text-sm">
+   637→   637→            <div className="flex justify-between">
+   638→   638→              <span className="text-gray-500">Questions answered:</span>
+   639→   639→              <span className="font-medium">{Object.keys(answers).length} / {questions.length}</span>
+   640→   640→            </div>
+   641→   641→            <div className="flex justify-between">
+   642→   642→              <span className="text-gray-500">Unanswered:</span>
+   643→   643→              <span className="font-medium">{questions.length - Object.keys(answers).length}</span>
+   644→   644→            </div>
+   645→   645→            <div className="flex justify-between">
+   646→   646→              <span className="text-gray-500">Marked for review:</span>
+   647→   647→              <span className="font-medium">{markedForReview.size}</span>
+   648→   648→            </div>
+   649→   649→            {questions.length - Object.keys(answers).length > 0 && (
+   650→   650→              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg text-amber-700">
+   651→   651→                <AlertTriangle className="size-4 shrink-0" />
+   652→   652→                <span>You have {questions.length - Object.keys(answers).length} unanswered question(s).</span>
+   653→   653→              </div>
+   654→   654→            )}
+   655→   655→          </div>
+   656→   656→          <DialogFooter>
+   657→   657→            <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancel</Button>
+   658→   658→            <Button
+   659→   659→              className="bg-amber-600 hover:bg-amber-700 text-white"
+   660→   660→              onClick={() => handleSubmit(true)}
+   661→   661→              disabled={submitting}
+   662→   662→            >
+   663→   663→              {submitting ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+   664→   664→              Submit Test
+   665→   665→            </Button>
+   666→   666→          </DialogFooter>
+   667→   667→        </DialogContent>
+   668→   668→      </Dialog>
+   669→   669→    </div>
+   670→   670→  )
+   671→   671→}
+   672→   672→

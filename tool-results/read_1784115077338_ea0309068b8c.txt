@@ -1,0 +1,719 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import React, { useEffect, useState, useCallback } from 'react'
+     4→     4→import {
+     5→     5→  AreaChart,
+     6→     6→  Area,
+     7→     7→  BarChart,
+     8→     8→  Bar,
+     9→     9→  XAxis,
+    10→    10→  YAxis,
+    11→    11→  CartesianGrid,
+    12→    12→  Tooltip,
+    13→    13→  ResponsiveContainer,
+    14→    14→} from 'recharts'
+    15→    15→import {
+    16→    16→  Users,
+    17→    17→  FileText,
+    18→    18→  DollarSign,
+    19→    19→  Target,
+    20→    20→  TrendingUp,
+    21→    21→  ArrowUpRight,
+    22→    22→  Plus,
+    23→    23→  Bell,
+    24→    24→  GraduationCap,
+    25→    25→  PenTool,
+    26→    26→  CalendarDays,
+    27→    27→  Activity,
+    28→    28→  AlertCircle,
+    29→    29→  RefreshCw,
+    30→    30→  ClipboardList,
+    31→    31→  BookOpen,
+    32→    32→  HelpCircle,
+    33→    33→  BarChart3,
+    34→    34→  CreditCard,
+    35→    35→} from 'lucide-react'
+    36→    36→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    37→    37→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+    38→    38→import { Badge } from '@/components/ui/badge'
+    39→    39→import { Button } from '@/components/ui/button'
+    40→    40→import { Skeleton } from '@/components/ui/skeleton'
+    41→    41→import { useAppStore } from '@/lib/store'
+    42→    42→import { useModuleAccess, useSubFeatureAccess } from '@/hooks/use-module-access'
+    43→    43→import { apiFetch } from '@/lib/api-client'
+    44→    44→
+    45→    45→// ── Types ────────────────────────────────────────────────────────────────────
+    46→    46→interface DashboardStats {
+    47→    47→  totalStudents: number
+    48→    48→  totalStudentsChange: number
+    49→    49→  activeTests: number
+    50→    50→  activeTestsChange: number
+    51→    51→  revenue: number
+    52→    52→  revenueChange: number
+    53→    53→  completionRate: number
+    54→    54→  completionRateChange: number
+    55→    55→}
+    56→    56→
+    57→    57→interface DashboardCounts {
+    58→    58→  totalCourses: number
+    59→    59→  totalTestSeries: number
+    60→    60→  totalBlogs: number
+    61→    61→  totalQuestions: number
+    62→    62→  totalTestAttempts: number
+    63→    63→  completedTestAttempts: number
+    64→    64→}
+    65→    65→
+    66→    66→interface RecentActivity {
+    67→    67→  id: string
+    68→    68→  type: string
+    69→    69→  description: string
+    70→    70→  timestamp: string
+    71→    71→}
+    72→    72→
+    73→    73→interface AnalyticsData {
+    74→    74→  success: boolean
+    75→    75→  revenueData: Array<{ month: string; revenue: number }>
+    76→    76→  enrollmentData: Array<{ month: string; students: number }>
+    77→    77→  testAttemptData: Array<{ month: string; attempts: number; completed: number }>
+    78→    78→  completionRateTrend: Array<{ month: string; rate: number }>
+    79→    79→  topTests: Array<{ testId: string; title: string; attempts: number }>
+    80→    80→  revenueByTestSeries: Array<{ id: string; title: string; revenue: number }>
+    81→    81→  recentActivity: RecentActivity[]
+    82→    82→  stats: DashboardStats
+    83→    83→}
+    84→    84→
+    85→    85→// ── Helpers ──────────────────────────────────────────────────────────────────
+    86→    86→function getTodayDate(): string {
+    87→    87→  const now = new Date()
+    88→    88→  return now.toLocaleDateString('en-IN', {
+    89→    89→    weekday: 'long',
+    90→    90→    year: 'numeric',
+    91→    91→    month: 'long',
+    92→    92→    day: 'numeric',
+    93→    93→  })
+    94→    94→}
+    95→    95→
+    96→    96→function formatCurrency(value: number): string {
+    97→    97→  if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`
+    98→    98→  if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`
+    99→    99→  if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`
+   100→   100→  return `₹${value.toLocaleString('en-IN')}`
+   101→   101→}
+   102→   102→
+   103→   103→function formatNumber(num: number): string {
+   104→   104→  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+   105→   105→  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+   106→   106→  return num.toLocaleString('en-IN')
+   107→   107→}
+   108→   108→
+   109→   109→function getTimeAgo(dateStr: string): string {
+   110→   110→  const now = new Date()
+   111→   111→  const date = new Date(dateStr)
+   112→   112→  const diffMs = now.getTime() - date.getTime()
+   113→   113→  const diffMins = Math.floor(diffMs / 60000)
+   114→   114→  if (diffMins < 1) return 'just now'
+   115→   115→  if (diffMins < 60) return `${diffMins}m ago`
+   116→   116→  const diffHours = Math.floor(diffMins / 60)
+   117→   117→  if (diffHours < 24) return `${diffHours}h ago`
+   118→   118→  const diffDays = Math.floor(diffHours / 24)
+   119→   119→  return `${diffDays}d ago`
+   120→   120→}
+   121→   121→
+   122→   122→function getActivityInitials(type: string): string {
+   123→   123→  switch (type) {
+   124→   124→    case 'student_registered': return 'SR'
+   125→   125→    case 'test_published': return 'TP'
+   126→   126→    case 'blog_created': return 'BC'
+   127→   127→    case 'test_attempt': return 'TA'
+   128→   128→    case 'payment': return 'PY'
+   129→   129→    default: return 'AC'
+   130→   130→  }
+   131→   131→}
+   132→   132→
+   133→   133→function getActivityColor(type: string): string {
+   134→   134→  switch (type) {
+   135→   135→    case 'student_registered': return 'bg-emerald-100 text-emerald-700'
+   136→   136→    case 'test_published': return 'bg-sky-100 text-sky-700'
+   137→   137→    case 'blog_created': return 'bg-amber-100 text-amber-700'
+   138→   138→    case 'test_attempt': return 'bg-violet-100 text-violet-700'
+   139→   139→    case 'payment': return 'bg-emerald-100 text-emerald-700'
+   140→   140→    default: return 'bg-gray-100 text-gray-700'
+   141→   141→  }
+   142→   142→}
+   143→   143→
+   144→   144→function getActivityIcon(type: string) {
+   145→   145→  switch (type) {
+   146→   146→    case 'student_registered': return GraduationCap
+   147→   147→    case 'test_published': return ClipboardList
+   148→   148→    case 'blog_created': return PenTool
+   149→   149→    case 'test_attempt': return Target
+   150→   150→    case 'payment': return CreditCard
+   151→   151→    default: return Activity
+   152→   152→  }
+   153→   153→}
+   154→   154→
+   155→   155→// ── Custom Tooltip Components ────────────────────────────────────────────────
+   156→   156→function RevenueTooltip({ active, payload, label }: any) {
+   157→   157→  if (active && payload && payload.length) {
+   158→   158→    return (
+   159→   159→      <div className="rounded-lg border bg-white p-3 shadow-lg">
+   160→   160→        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+   161→   161→        <p className="text-sm font-semibold text-emerald-600">
+   162→   162→          ₹{payload[0].value.toLocaleString('en-IN')}
+   163→   163→        </p>
+   164→   164→      </div>
+   165→   165→    )
+   166→   166→  }
+   167→   167→  return null
+   168→   168→}
+   169→   169→
+   170→   170→function EnrollmentTooltip({ active, payload, label }: any) {
+   171→   171→  if (active && payload && payload.length) {
+   172→   172→    return (
+   173→   173→      <div className="rounded-lg border bg-white p-3 shadow-lg">
+   174→   174→        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+   175→   175→        <p className="text-sm font-semibold text-sky-600">
+   176→   176→          {payload[0].value} students
+   177→   177→        </p>
+   178→   178→      </div>
+   179→   179→    )
+   180→   180→  }
+   181→   181→  return null
+   182→   182→}
+   183→   183→
+   184→   184→// ── Stat Card Config ────────────────────────────────────────────────────────
+   185→   185→function getAnalyticsCards(stats: DashboardStats | null) {
+   186→   186→  return [
+   187→   187→    {
+   188→   188→      title: 'Total Students',
+   189→   189→      value: stats ? formatNumber(stats.totalStudents) : '—',
+   190→   190→      change: stats?.totalStudentsChange ? `${stats.totalStudentsChange > 0 ? '+' : ''}${stats.totalStudentsChange}%` : '0%',
+   191→   191→      changeLabel: 'from last month',
+   192→   192→      icon: Users,
+   193→   193→      accentBg: 'bg-emerald-50',
+   194→   194→      accentText: 'text-emerald-600',
+   195→   195→      accentBorder: 'border-l-emerald-500',
+   196→   196→    },
+   197→   197→    {
+   198→   198→      title: 'Active Tests',
+   199→   199→      value: stats ? formatNumber(stats.activeTests) : '—',
+   200→   200→      change: stats?.activeTestsChange ? `${stats.activeTestsChange > 0 ? '+' : ''}${stats.activeTestsChange}%` : '0%',
+   201→   201→      changeLabel: 'from last month',
+   202→   202→      icon: FileText,
+   203→   203→      accentBg: 'bg-sky-50',
+   204→   204→      accentText: 'text-sky-600',
+   205→   205→      accentBorder: 'border-l-sky-500',
+   206→   206→    },
+   207→   207→    {
+   208→   208→      title: 'Revenue',
+   209→   209→      value: stats ? formatCurrency(stats.revenue) : '—',
+   210→   210→      change: stats?.revenueChange ? `${stats.revenueChange > 0 ? '+' : ''}${stats.revenueChange}%` : '0%',
+   211→   211→      changeLabel: 'from last month',
+   212→   212→      icon: DollarSign,
+   213→   213→      accentBg: 'bg-amber-50',
+   214→   214→      accentText: 'text-amber-600',
+   215→   215→      accentBorder: 'border-l-amber-500',
+   216→   216→    },
+   217→   217→    {
+   218→   218→      title: 'Completion Rate',
+   219→   219→      value: stats ? `${stats.completionRate}%` : '—',
+   220→   220→      change: stats?.completionRateChange ? `${stats.completionRateChange > 0 ? '+' : ''}${stats.completionRateChange}%` : '0%',
+   221→   221→      changeLabel: 'from last month',
+   222→   222→      icon: Target,
+   223→   223→      accentBg: 'bg-violet-50',
+   224→   224→      accentText: 'text-violet-600',
+   225→   225→      accentBorder: 'border-l-violet-500',
+   226→   226→    },
+   227→   227→  ]
+   228→   228→}
+   229→   229→
+   230→   230→// ── Skeletons ────────────────────────────────────────────────────────────────
+   231→   231→function StatsSkeleton() {
+   232→   232→  return (
+   233→   233→    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   234→   234→      {Array.from({ length: 4 }).map((_, i) => (
+   235→   235→        <Card key={i} className="min-w-0 rounded-xl border-l-4 border-l-gray-200 bg-white p-6 shadow-sm">
+   236→   236→          <div className="flex items-start justify-between">
+   237→   237→            <div className="space-y-2">
+   238→   238→              <Skeleton className="h-3 w-20" />
+   239→   239→              <Skeleton className="h-7 w-16" />
+   240→   240→            </div>
+   241→   241→            <Skeleton className="size-11 rounded-full" />
+   242→   242→          </div>
+   243→   243→        </Card>
+   244→   244→      ))}
+   245→   245→    </div>
+   246→   246→  )
+   247→   247→}
+   248→   248→
+   249→   249→function ChartSkeleton() {
+   250→   250→  return (
+   251→   251→    <Card className="min-w-0 rounded-xl bg-white shadow-sm">
+   252→   252→      <CardHeader className="pb-2">
+   253→   253→        <Skeleton className="h-5 w-32" />
+   254→   254→      </CardHeader>
+   255→   255→      <CardContent>
+   256→   256→        <Skeleton className="h-[280px] w-full" />
+   257→   257→      </CardContent>
+   258→   258→    </Card>
+   259→   259→  )
+   260→   260→}
+   261→   261→
+   262→   262→// ── Main Component ───────────────────────────────────────────────────────────
+   263→   263→export default function DashboardPage() {
+   264→   264→  const { userName, orgCode } = useAppStore()
+   265→   265→  const { setCurrentPage } = useAppStore()
+   266→   266→  const [stats, setStats] = useState<DashboardStats | null>(null)
+   267→   267→  const [counts, setCounts] = useState<DashboardCounts | null>(null)
+   268→   268→  const [activities, setActivities] = useState<RecentActivity[]>([])
+   269→   269→  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+   270→   270→  const [loading, setLoading] = useState(true)
+   271→   271→  const [error, setError] = useState<string | null>(null)
+   272→   272→
+   273→   273→  const fetchDashboard = useCallback(async () => {
+   274→   274→    setLoading(true)
+   275→   275→    setError(null)
+   276→   276→    try {
+   277→   277→      // Fetch both dashboard data and analytics
+   278→   278→      const [dashRes, analyticsRes] = await Promise.all([
+   279→   279→        apiFetch(`/api/dashboard?organizationId=${orgCode}`),
+   280→   280→        apiFetch('/api/dashboard/analytics'),
+   281→   281→      ])
+   282→   282→
+   283→   283→      if (!dashRes.ok) throw new Error('Failed to load dashboard')
+   284→   284→      const dashData = await dashRes.json()
+   285→   285→      setStats(dashData.stats)
+   286→   286→      setCounts(dashData.counts)
+   287→   287→      setActivities(dashData.recentActivities || [])
+   288→   288→
+   289→   289→      // Try to load analytics (may fail if not authenticated properly)
+   290→   290→      try {
+   291→   291→        const analyticsJson = await analyticsRes.json()
+   292→   292→        if (analyticsJson.success) {
+   293→   293→          setAnalytics(analyticsJson)
+   294→   294→          // Use analytics stats (real revenue) if available
+   295→   295→          if (analyticsJson.stats) {
+   296→   296→            setStats(analyticsJson.stats)
+   297→   297→          }
+   298→   298→          // Use analytics activity if available
+   299→   299→          if (analyticsJson.recentActivity && analyticsJson.recentActivity.length > 0) {
+   300→   300→            setActivities(analyticsJson.recentActivity)
+   301→   301→          }
+   302→   302→        }
+   303→   303→      } catch {
+   304→   304→        // Analytics optional - use dashboard data
+   305→   305→      }
+   306→   306→    } catch (err: any) {
+   307→   307→      setError(err.message || 'Something went wrong')
+   308→   308→    } finally {
+   309→   309→      setLoading(false)
+   310→   310→    }
+   311→   311→  }, [orgCode])
+   312→   312→
+   313→   313→  useEffect(() => {
+   314→   314→    if (orgCode) fetchDashboard()
+   315→   315→  }, [orgCode, fetchDashboard])
+   316→   316→
+   317→   317→  const analyticsCards = getAnalyticsCards(stats)
+   318→   318→
+   319→   319→  // Get real chart data from analytics
+   320→   320→  const revenueData = analytics?.revenueData ?? []
+   321→   321→  const enrollmentData = analytics?.enrollmentData ?? []
+   322→   322→
+   323→   323→  // Feature-level access checks for quick actions
+   324→   324→  const testsAccess = useModuleAccess('tests')
+   325→   325→  const blogsAccess = useModuleAccess('blogs')
+   326→   326→  const reportsAccess = useModuleAccess('reports')
+   327→   327→
+   328→   328→  const quickActions = [
+   329→   329→    {
+   330→   330→      label: 'Create Test',
+   331→   331→      icon: FileText,
+   332→   332→      variant: 'default' as const,
+   333→   333→      className: 'bg-amber-600 hover:bg-amber-700 text-white',
+   334→   334→      onClick: () => setCurrentPage('tests'),
+   335→   335→      enabled: testsAccess.moduleEnabled && testsAccess.canCreate,
+   336→   336→    },
+   337→   337→    {
+   338→   338→      label: 'Add Student',
+   339→   339→      icon: GraduationCap,
+   340→   340→      variant: 'outline' as const,
+   341→   341→      className: 'border-amber-200 text-amber-700 hover:bg-amber-50',
+   342→   342→      onClick: () => setCurrentPage('tests'),
+   343→   343→      enabled: true,
+   344→   344→    },
+   345→   345→    {
+   346→   346→      label: 'Publish Blog',
+   347→   347→      icon: PenTool,
+   348→   348→      variant: 'outline' as const,
+   349→   349→      className: 'border-amber-200 text-amber-700 hover:bg-amber-50',
+   350→   350→      onClick: () => setCurrentPage('blogs'),
+   351→   351→      enabled: blogsAccess.moduleEnabled && blogsAccess.canPublish,
+   352→   352→    },
+   353→   353→    {
+   354→   354→      label: 'View Reports',
+   355→   355→      icon: BarChart3,
+   356→   356→      variant: 'outline' as const,
+   357→   357→      className: 'border-amber-200 text-amber-700 hover:bg-amber-50',
+   358→   358→      onClick: () => setCurrentPage('reports-sales'),
+   359→   359→      enabled: reportsAccess.moduleEnabled,
+   360→   360→    },
+   361→   361→  ]
+   362→   362→
+   363→   363→  // ── Error state ──
+   364→   364→  if (error && !stats) {
+   365→   365→    return (
+   366→   366→      <div className="space-y-6">
+   367→   367→        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+   368→   368→          <div>
+   369→   369→            <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+   370→   370→              Welcome back, {userName || 'Teacher'}
+   371→   371→            </h1>
+   372→   372→            <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+   373→   373→              <CalendarDays className="size-4" />
+   374→   374→              <span>{getTodayDate()}</span>
+   375→   375→            </div>
+   376→   376→          </div>
+   377→   377→        </div>
+   378→   378→        <Card className="bg-white shadow-sm">
+   379→   379→          <CardContent className="p-8 flex flex-col items-center justify-center gap-4">
+   380→   380→            <div className="flex items-center justify-center size-14 rounded-full bg-red-50">
+   381→   381→              <AlertCircle className="size-7 text-red-500" />
+   382→   382→            </div>
+   383→   383→            <div className="text-center">
+   384→   384→              <p className="text-sm font-medium text-gray-900">Failed to load dashboard</p>
+   385→   385→              <p className="text-xs text-muted-foreground mt-1">{error}</p>
+   386→   386→            </div>
+   387→   387→            <Button variant="outline" size="sm" onClick={fetchDashboard} className="gap-2">
+   388→   388→              <RefreshCw className="size-3.5" />
+   389→   389→              Retry
+   390→   390→            </Button>
+   391→   391→          </CardContent>
+   392→   392→        </Card>
+   393→   393→      </div>
+   394→   394→    )
+   395→   395→  }
+   396→   396→
+   397→   397→  return (
+   398→   398→    <div className="space-y-6">
+   399→   399→      {/* ── Welcome Header ──────────────────────────────────────────────── */}
+   400→   400→      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+   401→   401→        <div>
+   402→   402→          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
+   403→   403→            Welcome back, {userName || 'Teacher'}
+   404→   404→          </h1>
+   405→   405→          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+   406→   406→            <CalendarDays className="size-4" />
+   407→   407→            <span>{getTodayDate()}</span>
+   408→   408→          </div>
+   409→   409→        </div>
+   410→   410→        <Button
+   411→   411→          variant="outline"
+   412→   412→          className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 self-start sm:self-auto w-full sm:w-auto"
+   413→   413→          onClick={() => setCurrentPage('reports-sales')}
+   414→   414→        >
+   415→   415→          <Activity className="size-4" />
+   416→   416→          View Reports
+   417→   417→          <ArrowUpRight className="size-3.5" />
+   418→   418→        </Button>
+   419→   419→      </div>
+   420→   420→
+   421→   421→      {/* ── Analytics Cards ──────────────────────────────────────────────── */}
+   422→   422→      {loading ? (
+   423→   423→        <StatsSkeleton />
+   424→   424→      ) : (
+   425→   425→        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   426→   426→          {analyticsCards.map((card) => {
+   427→   427→            const Icon = card.icon
+   428→   428→            return (
+   429→   429→              <Card
+   430→   430→                key={card.title}
+   431→   431→                className={`min-w-0 rounded-xl border-l-4 ${card.accentBorder} bg-white p-6 shadow-sm transition-shadow hover:shadow-md`}
+   432→   432→              >
+   433→   433→                <div className="flex items-start justify-between">
+   434→   434→                  <div className="space-y-2">
+   435→   435→                    <p className="text-sm font-medium text-muted-foreground">
+   436→   436→                      {card.title}
+   437→   437→                    </p>
+   438→   438→                    <p className="text-2xl font-bold tracking-tight text-foreground">
+   439→   439→                      {card.value}
+   440→   440→                    </p>
+   441→   441→                    <div className="flex items-center gap-1.5">
+   442→   442→                      <TrendingUp className="size-3.5 text-emerald-500" />
+   443→   443→                      <span className="text-xs font-medium text-emerald-600">
+   444→   444→                        {card.change}
+   445→   445→                      </span>
+   446→   446→                      <span className="text-xs text-muted-foreground">
+   447→   447→                        {card.changeLabel}
+   448→   448→                      </span>
+   449→   449→                    </div>
+   450→   450→                  </div>
+   451→   451→                  <div
+   452→   452→                    className={`flex size-11 shrink-0 items-center justify-center rounded-full ${card.accentBg}`}
+   453→   453→                  >
+   454→   454→                    <Icon className={`size-5 ${card.accentText}`} />
+   455→   455→                  </div>
+   456→   456→                </div>
+   457→   457→              </Card>
+   458→   458→            )
+   459→   459→          })}
+   460→   460→        </div>
+   461→   461→      )}
+   462→   462→
+   463→   463→      {/* ── Extra stats row ──────────────────────────────────────────────── */}
+   464→   464→      {!loading && counts && (
+   465→   465→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   466→   466→          <Card className="rounded-xl bg-white shadow-sm">
+   467→   467→            <CardContent className="p-4 flex items-center gap-3">
+   468→   468→              <div className="flex items-center justify-center size-9 rounded-full bg-sky-50">
+   469→   469→                <BookOpen className="size-4 text-sky-600" />
+   470→   470→              </div>
+   471→   471→              <div>
+   472→   472→                <p className="text-xs text-muted-foreground">Courses</p>
+   473→   473→                <p className="text-lg font-bold text-gray-900">{counts.totalCourses}</p>
+   474→   474→              </div>
+   475→   475→            </CardContent>
+   476→   476→          </Card>
+   477→   477→          <Card className="rounded-xl bg-white shadow-sm">
+   478→   478→            <CardContent className="p-4 flex items-center gap-3">
+   479→   479→              <div className="flex items-center justify-center size-9 rounded-full bg-emerald-50">
+   480→   480→                <ClipboardList className="size-4 text-emerald-600" />
+   481→   481→              </div>
+   482→   482→              <div>
+   483→   483→                <p className="text-xs text-muted-foreground">Test Series</p>
+   484→   484→                <p className="text-lg font-bold text-gray-900">{counts.totalTestSeries}</p>
+   485→   485→              </div>
+   486→   486→            </CardContent>
+   487→   487→          </Card>
+   488→   488→          <Card className="rounded-xl bg-white shadow-sm">
+   489→   489→            <CardContent className="p-4 flex items-center gap-3">
+   490→   490→              <div className="flex items-center justify-center size-9 rounded-full bg-amber-50">
+   491→   491→                <HelpCircle className="size-4 text-amber-600" />
+   492→   492→              </div>
+   493→   493→              <div>
+   494→   494→                <p className="text-xs text-muted-foreground">Questions</p>
+   495→   495→                <p className="text-lg font-bold text-gray-900">{counts.totalQuestions}</p>
+   496→   496→              </div>
+   497→   497→            </CardContent>
+   498→   498→          </Card>
+   499→   499→          <Card className="rounded-xl bg-white shadow-sm">
+   500→   500→            <CardContent className="p-4 flex items-center gap-3">
+   501→   501→              <div className="flex items-center justify-center size-9 rounded-full bg-violet-50">
+   502→   502→                <PenTool className="size-4 text-violet-600" />
+   503→   503→              </div>
+   504→   504→              <div>
+   505→   505→                <p className="text-xs text-muted-foreground">Blogs</p>
+   506→   506→                <p className="text-lg font-bold text-gray-900">{counts.totalBlogs}</p>
+   507→   507→              </div>
+   508→   508→            </CardContent>
+   509→   509→          </Card>
+   510→   510→        </div>
+   511→   511→      )}
+   512→   512→
+   513→   513→      {/* ── Charts Section ───────────────────────────────────────────────── */}
+   514→   514→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+   515→   515→        {/* Revenue Overview */}
+   516→   516→        {loading ? (
+   517→   517→          <ChartSkeleton />
+   518→   518→        ) : (
+   519→   519→          <Card className="min-w-0 rounded-xl bg-white shadow-sm">
+   520→   520→            <CardHeader className="pb-2">
+   521→   521→              <div className="flex items-center justify-between">
+   522→   522→                <CardTitle className="text-base font-semibold text-foreground">
+   523→   523→                  Revenue Overview
+   524→   524→                </CardTitle>
+   525→   525→                <Badge
+   526→   526→                  variant="secondary"
+   527→   527→                  className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+   528→   528→                >
+   529→   529→                  Last 6 months
+   530→   530→                </Badge>
+   531→   531→              </div>
+   532→   532→            </CardHeader>
+   533→   533→            <CardContent>
+   534→   534→              <div className="h-[220px] sm:h-[280px] w-full">
+   535→   535→                {revenueData.length > 0 && revenueData.some(d => d.revenue > 0) ? (
+   536→   536→                  <ResponsiveContainer width="100%" height="100%">
+   537→   537→                    <AreaChart
+   538→   538→                      data={revenueData}
+   539→   539→                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+   540→   540→                    >
+   541→   541→                      <defs>
+   542→   542→                        <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+   543→   543→                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+   544→   544→                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+   545→   545→                        </linearGradient>
+   546→   546→                      </defs>
+   547→   547→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+   548→   548→                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+   549→   549→                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} width={50} />
+   550→   550→                      <Tooltip content={<RevenueTooltip />} />
+   551→   551→                      <Area
+   552→   552→                        type="monotone"
+   553→   553→                        dataKey="revenue"
+   554→   554→                        stroke="#10b981"
+   555→   555→                        strokeWidth={2.5}
+   556→   556→                        fill="url(#revenueGradient)"
+   557→   557→                        dot={{ fill: '#10b981', strokeWidth: 2, stroke: '#fff', r: 4 }}
+   558→   558→                        activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
+   559→   559→                      />
+   560→   560→                    </AreaChart>
+   561→   561→                  </ResponsiveContainer>
+   562→   562→                ) : (
+   563→   563→                  <div className="flex items-center justify-center h-full text-muted-foreground">
+   564→   564→                    <div className="text-center">
+   565→   565→                      <BarChart3 className="size-10 mx-auto mb-2 text-gray-300" />
+   566→   566→                      <p className="text-sm">No revenue data yet</p>
+   567→   567→                      <p className="text-xs text-muted-foreground">Data will appear when payments are received</p>
+   568→   568→                    </div>
+   569→   569→                  </div>
+   570→   570→                )}
+   571→   571→              </div>
+   572→   572→            </CardContent>
+   573→   573→          </Card>
+   574→   574→        )}
+   575→   575→
+   576→   576→        {/* Student Enrollment */}
+   577→   577→        {loading ? (
+   578→   578→          <ChartSkeleton />
+   579→   579→        ) : (
+   580→   580→          <Card className="min-w-0 rounded-xl bg-white shadow-sm">
+   581→   581→            <CardHeader className="pb-2">
+   582→   582→              <div className="flex items-center justify-between">
+   583→   583→                <CardTitle className="text-base font-semibold text-foreground">
+   584→   584→                  Student Enrollment
+   585→   585→                </CardTitle>
+   586→   586→                <Badge
+   587→   587→                  variant="secondary"
+   588→   588→                  className="bg-sky-50 text-sky-700 hover:bg-sky-100"
+   589→   589→                >
+   590→   590→                  Last 6 months
+   591→   591→                </Badge>
+   592→   592→              </div>
+   593→   593→            </CardHeader>
+   594→   594→            <CardContent>
+   595→   595→              <div className="h-[220px] sm:h-[280px] w-full">
+   596→   596→                {enrollmentData.length > 0 && enrollmentData.some(d => d.students > 0) ? (
+   597→   597→                  <ResponsiveContainer width="100%" height="100%">
+   598→   598→                    <BarChart
+   599→   599→                      data={enrollmentData}
+   600→   600→                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+   601→   601→                    >
+   602→   602→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+   603→   603→                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+   604→   604→                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} width={40} />
+   605→   605→                      <Tooltip content={<EnrollmentTooltip />} />
+   606→   606→                      <Bar dataKey="students" fill="#0ea5e9" radius={[6, 6, 0, 0]} barSize={36} />
+   607→   607→                    </BarChart>
+   608→   608→                  </ResponsiveContainer>
+   609→   609→                ) : (
+   610→   610→                  <div className="flex items-center justify-center h-full text-muted-foreground">
+   611→   611→                    <div className="text-center">
+   612→   612→                      <Users className="size-10 mx-auto mb-2 text-gray-300" />
+   613→   613→                      <p className="text-sm">No enrollment data yet</p>
+   614→   614→                      <p className="text-xs text-muted-foreground">Data will appear when students register</p>
+   615→   615→                    </div>
+   616→   616→                  </div>
+   617→   617→                )}
+   618→   618→              </div>
+   619→   619→            </CardContent>
+   620→   620→          </Card>
+   621→   621→        )}
+   622→   622→      </div>
+   623→   623→
+   624→   624→      {/* ── Recent Activity + Quick Actions ──────────────────────────────── */}
+   625→   625→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+   626→   626→        {/* Recent Activity — with REAL data */}
+   627→   627→        <Card className="min-w-0 rounded-xl bg-white shadow-sm lg:col-span-2">
+   628→   628→          <CardHeader className="pb-2">
+   629→   629→            <div className="flex items-center justify-between">
+   630→   630→              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+   631→   631→                <Activity className="size-4 text-amber-600" />
+   632→   632→                Recent Activity
+   633→   633→              </CardTitle>
+   634→   634→              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
+   635→   635→                View All
+   636→   636→              </Button>
+   637→   637→            </div>
+   638→   638→          </CardHeader>
+   639→   639→          <CardContent>
+   640→   640→            <div className="max-h-64 sm:max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+   641→   641→              {loading ? (
+   642→   642→                <div className="space-y-3">
+   643→   643→                  {Array.from({ length: 5 }).map((_, i) => (
+   644→   644→                    <div key={i} className="flex items-center gap-3">
+   645→   645→                      <Skeleton className="size-9 rounded-full shrink-0" />
+   646→   646→                      <div className="flex-1 space-y-1.5">
+   647→   647→                        <Skeleton className="h-4 w-full" />
+   648→   648→                        <Skeleton className="h-3 w-20" />
+   649→   649→                      </div>
+   650→   650→                    </div>
+   651→   651→                  ))}
+   652→   652→                </div>
+   653→   653→              ) : activities.length === 0 ? (
+   654→   654→                <div className="py-8 text-center">
+   655→   655→                  <Activity className="size-10 text-gray-300 mx-auto mb-2" />
+   656→   656→                  <p className="text-sm text-muted-foreground">No recent activity</p>
+   657→   657→                </div>
+   658→   658→              ) : (
+   659→   659→                <div className="space-y-1">
+   660→   660→                  {activities.map((activity) => {
+   661→   661→                    const Icon = getActivityIcon(activity.type)
+   662→   662→                    return (
+   663→   663→                      <div
+   664→   664→                        key={activity.id + activity.type + activity.timestamp}
+   665→   665→                        className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-muted/50"
+   666→   666→                      >
+   667→   667→                        <Avatar className="size-9">
+   668→   668→                          <AvatarFallback className={getActivityColor(activity.type)}>
+   669→   669→                            <Icon className="size-4" />
+   670→   670→                          </AvatarFallback>
+   671→   671→                        </Avatar>
+   672→   672→                        <div className="flex-1 min-w-0">
+   673→   673→                          <p className="text-sm font-medium text-foreground truncate">
+   674→   674→                            {activity.description}
+   675→   675→                          </p>
+   676→   676→                          <p className="text-xs text-muted-foreground">
+   677→   677→                            {getTimeAgo(activity.timestamp)}
+   678→   678→                          </p>
+   679→   679→                        </div>
+   680→   680→                      </div>
+   681→   681→                    )
+   682→   682→                  })}
+   683→   683→                </div>
+   684→   684→              )}
+   685→   685→            </div>
+   686→   686→          </CardContent>
+   687→   687→        </Card>
+   688→   688→
+   689→   689→        {/* Quick Actions */}
+   690→   690→        <Card className="min-w-0 rounded-xl bg-white shadow-sm">
+   691→   691→          <CardHeader className="pb-2">
+   692→   692→            <CardTitle className="text-base font-semibold text-foreground">
+   693→   693→              Quick Actions
+   694→   694→            </CardTitle>
+   695→   695→          </CardHeader>
+   696→   696→          <CardContent>
+   697→   697→            <div className="grid grid-cols-2 gap-3">
+   698→   698→              {quickActions.filter(a => a.enabled).map((action) => {
+   699→   699→                const Icon = action.icon
+   700→   700→                return (
+   701→   701→                  <Button
+   702→   702→                    key={action.label}
+   703→   703→                    variant={action.variant}
+   704→   704→                    className={`${action.className} h-auto flex-col gap-2 rounded-xl py-4 cursor-pointer`}
+   705→   705→                    onClick={action.onClick}
+   706→   706→                  >
+   707→   707→                    <Icon className="size-5" />
+   708→   708→                    <span className="text-xs font-medium">{action.label}</span>
+   709→   709→                  </Button>
+   710→   710→                )
+   711→   711→              })}
+   712→   712→            </div>
+   713→   713→          </CardContent>
+   714→   714→        </Card>
+   715→   715→      </div>
+   716→   716→    </div>
+   717→   717→  )
+   718→   718→}
+   719→   719→

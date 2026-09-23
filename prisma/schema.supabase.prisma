@@ -1,0 +1,441 @@
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE POSTGRESCHEMA — Er. Raju Kumawat Tech
+// ═══════════════════════════════════════════════════════════════
+// Run: DATABASE_URL="..." npx prisma db push --schema=prisma/schema.supabase.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  code              String   @unique
+  logo              String?
+  accentColor       String   @default("#111111")
+  phone             String?
+  status            String   @default("trial") // active, inactive, trial
+  adminCommission   Float    @default(20) // Super admin commission percentage
+  gatewayCharge     Float    @default(2.36) // Razorpay gateway charge percentage
+  razorpayKeyId     String?
+  razorpayKeySecret String?
+  razorpayAccountId String? // Teacher's Razorpay account for payment split
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users           User[]
+  courses         Course[]
+  testSeries      TestSeries[]
+  tests           Test[]
+  blogs           Blog[]
+  quickLinks      QuickLink[]
+  banners         Banner[]
+  coupons         Coupon[]
+  categories      Category[]
+  notifications   Notification[]
+  leads           Lead[]
+  supportQueries  SupportQuery[]
+  students        Student[]
+  orders          Order[]
+  payments        Payment[]
+  digitalProducts DigitalProduct[]
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  name                String
+  password            String
+  role                String    @default("teacher") // platform_admin, teacher, student
+  phone               String?
+  avatar              String?
+  organizationId      String?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  passwordChangedAt   DateTime? @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organization  Organization?  @relation(fields: [organizationId], references: [id])
+  loginAttempts LoginAttempt[]
+
+  @@index([organizationId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String?
+  userAgent String?
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [email], references: [email])
+
+  @@index([email])
+}
+
+model Student {
+  id             String   @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  avatar         String?
+  isActive       Boolean  @default(true)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  testAttempts TestAttempt[]
+  orders       Order[]
+
+  @@index([organizationId])
+}
+
+model Category {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String
+  icon           String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  thumbnail      String?
+  price          Float    @default(0)
+  mrp            Float    @default(0)
+  category       String?
+  status         String   @default("draft") // draft, published, archived
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model TestSeries {
+  id               String    @id @default(cuid())
+  title            String
+  description      String?
+  thumbnail        String?
+  price            Float     @default(0)
+  mrp              Float     @default(0)
+  category         String?
+  isCombo          Boolean   @default(false)
+  includeTestMaker Boolean   @default(false)
+  allowPayment     Boolean   @default(true)
+  validityMode     String    @default("lifetime") // validity, end_date, lifetime
+  validityDays     Int?
+  endDate          DateTime?
+  seoTitle         String?
+  seoDescription   String?
+  richSnippets     Boolean   @default(false)
+  sortOrder        Int       @default(0)
+  status           String    @default("draft")
+  organizationId   String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  tests        Test[]
+
+  @@index([organizationId])
+}
+
+model Test {
+  id                String    @id @default(cuid())
+  title             String
+  instructions      String?
+  status            String    @default("free") // free, paid
+  isLive            Boolean   @default(false)
+  isLocked          Boolean   @default(false)
+  numberOfQuestions Int       @default(0)
+  totalMarks        Float     @default(0)
+  totalDuration     Int       @default(0) // in minutes
+  sortOrder         Int       @default(0)
+  sectionWiseMarks  Boolean   @default(false)
+  negativeMarks     Float     @default(0)
+  startDate         DateTime?
+  endDate           DateTime?
+  language          String    @default("english")
+  translationTitle  String?
+  maxAttempts       Int       @default(1)
+  shuffleQuestions  Boolean   @default(false)
+  shuffleOptions    Boolean   @default(false)
+  displayPause      Boolean   @default(false)
+  allCompulsory     Boolean   @default(true)
+  uiType            String    @default("default")
+  attachPdf         String?
+  allowPdfExport    Boolean   @default(false)
+  partialScoring    Boolean   @default(false)
+  displayResults    Boolean   @default(true)
+  displayRank       Boolean   @default(true)
+  showSolution      Boolean   @default(true)
+  showTotalStudents Boolean   @default(false)
+  showPercentile    Boolean   @default(false)
+  solutionLink      String?
+  telegramSettings  String?
+  testSeriesId      String
+  organizationId    String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  testSeries   TestSeries    @relation(fields: [testSeriesId], references: [id])
+  questions    Question[]
+  testAttempts TestAttempt[]
+
+  @@index([organizationId])
+  @@index([testSeriesId])
+}
+
+model Question {
+  id              String   @id @default(cuid())
+  type            String   @default("mcq") // mcq, multiple_correct, assertion_reason, matching, true_false, statement_based, numerical, subjective, image_based, pdf_based, omr_based
+  heading         String?
+  directive       String?
+  title           String
+  image1          String?
+  image2          String?
+  image3          String?
+  option1         String?
+  option2         String?
+  option3         String?
+  option4         String?
+  option5         String?
+  option1Image    String?
+  option2Image    String?
+  option3Image    String?
+  option4Image    String?
+  option5Image    String?
+  correctOption   String? // comma-separated for multiple correct
+  solutionHeading String?
+  solutionImage1  String?
+  solutionImage2  String?
+  solutionVideo   String?
+  solutionText    String?
+  section         String?
+  positiveMarks   Float    @default(1)
+  negativeMarks   Float    @default(0)
+  sortOrder       Int      @default(0)
+  testId          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  test              Test               @relation(fields: [testId], references: [id])
+  reportedQuestions ReportedQuestion[]
+
+  @@index([testId])
+}
+
+model TestAttempt {
+  id          String    @id @default(cuid())
+  studentId   String
+  testId      String
+  score       Float     @default(0)
+  totalMarks  Float     @default(0)
+  rank        Int?
+  percentile  Float?
+  timeTaken   Int       @default(0) // in seconds
+  status      String    @default("in_progress") // in_progress, completed, abandoned
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  answers     String? // JSON string
+
+  student Student @relation(fields: [studentId], references: [id])
+  test    Test    @relation(fields: [testId], references: [id])
+
+  @@index([studentId])
+  @@index([testId])
+}
+
+model ReportedQuestion {
+  id         String   @id @default(cuid())
+  questionId String
+  studentId  String?
+  reason     String
+  status     String   @default("pending") // pending, resolved, dismissed
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@index([questionId])
+}
+
+model Blog {
+  id             String   @id @default(cuid())
+  title          String
+  content        String?
+  thumbnail      String?
+  status         String   @default("draft") // draft, published
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model QuickLink {
+  id             String   @id @default(cuid())
+  title          String
+  url            String
+  icon           String?
+  sortOrder      Int      @default(0)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Banner {
+  id             String   @id @default(cuid())
+  title          String
+  image          String
+  link           String?
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Coupon {
+  id             String    @id @default(cuid())
+  code           String
+  discount       Float
+  discountType   String    @default("percentage") // percentage, flat
+  maxUses        Int?
+  usedCount      Int       @default(0)
+  validFrom      DateTime?
+  validTo        DateTime?
+  isActive       Boolean   @default(true)
+  organizationId String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  title          String
+  message        String
+  type           String   @default("info") // info, warning, success, error
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Lead {
+  id             String   @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  source         String?
+  status         String   @default("new") // new, contacted, qualified, lost
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model SupportQuery {
+  id             String   @id @default(cuid())
+  subject        String
+  message        String
+  status         String   @default("open") // open, in_progress, resolved, closed
+  studentName    String?
+  studentEmail   String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Order {
+  id             String   @id @default(cuid())
+  studentId      String
+  items          String // JSON string
+  totalAmount    Float
+  status         String   @default("pending") // pending, completed, failed, refunded
+  couponCode     String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  student      Student      @relation(fields: [studentId], references: [id])
+  payments     Payment[]
+
+  @@index([organizationId])
+  @@index([studentId])
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  orderId        String
+  amount         Float
+  method         String? // razorpay, upi, card, netbanking
+  status         String   @default("pending") // pending, success, failed
+  transactionId  String?
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id])
+
+  @@index([organizationId])
+  @@index([orderId])
+}
+
+model DigitalProduct {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  thumbnail      String?
+  file           String?
+  price          Float    @default(0)
+  status         String   @default("draft")
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
