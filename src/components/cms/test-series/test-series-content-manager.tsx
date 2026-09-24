@@ -309,8 +309,108 @@ export function TestSeriesContentManager({
       case 'export_pdf_with_sol':
       case 'export_pdf_without_sol': {
         const withSol = action === 'export_pdf_with_sol'
-        toast.success('Opening PDF generator in new tab...')
-        window.open(`/print-test/${test.id}?solutions=${withSol}`, '_blank')
+        const toastId = `pdf-${test.id}`
+        toast.loading(`Fetching test data...`, { id: toastId })
+        try {
+          const res = await fetch(`/api/teacher/tests/${test.id}`)
+          const data = await res.json()
+          if (!data.success || !data.data) throw new Error('Failed to load test data')
+          const fullTest = data.data
+
+          toast.loading(`Generating PDF...`, { id: toastId })
+          
+          // Create invisible container
+          const container = document.createElement('div')
+          container.style.position = 'absolute'
+          container.style.left = '-9999px'
+          container.style.top = '-9999px'
+          document.body.appendChild(container)
+          
+          const brandName = "Er. Raju Kumawat"
+          
+          let html = `
+            <div style="font-family: sans-serif; color: black; background: white; padding: 20px; position: relative;">
+              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; opacity: 0.1; pointer-events: none; overflow: hidden; z-index: 0;">
+                <h1 style="font-size: 150px; transform: rotate(-45deg); white-space: nowrap;">${brandName}</h1>
+              </div>
+              <div style="position: relative; z-index: 10; max-width: 800px; margin: 0 auto;">
+                <div style="text-align: center; border-bottom: 2px solid black; padding-bottom: 16px; margin-bottom: 24px;">
+                  <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 8px;">${brandName}</h1>
+                  <h2 style="font-size: 20px; font-weight: 600;">${fullTest.title}</h2>
+                  <p style="color: #4b5563; margin-top: 8px;">
+                    ${fullTest.subject} &bull; Total Marks: ${fullTest.totalMarks} &bull; Duration: ${fullTest.totalDuration} mins<br/>
+                    ${withSol ? '(With Solutions)' : '(Questions Only)'}
+                  </p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 32px;">
+          `
+          
+          const questions = fullTest.questions || []
+          questions.forEach((q: any, i: number) => {
+            const opts = [q.option1, q.option2, q.option3, q.option4, q.option5].filter(Boolean)
+            html += `
+              <div style="page-break-inside: avoid; margin-bottom: 24px;">
+                <div style="display: flex; gap: 8px;">
+                  <span style="font-weight: bold; min-width: 30px;">Q${i + 1}.</span>
+                  <div>${q.title || q.heading || ''}</div>
+                </div>
+                <div style="margin-left: 38px; margin-top: 12px; display: flex; flex-direction: column; gap: 12px;">
+            `
+            opts.forEach((opt, j) => {
+              html += `
+                <div style="display: flex; gap: 8px;">
+                  <span style="font-weight: 500; min-width: 30px;">(${String.fromCharCode(65 + j)})</span>
+                  <div>${opt}</div>
+                </div>
+              `
+            })
+            html += `</div>` // end options
+
+            if (withSol) {
+              html += `
+                <div style="margin-left: 38px; margin-top: 16px; padding: 16px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 14px;">
+                  <div style="font-weight: bold; margin-bottom: 4px;">Answer: ${q.correctOption ? 'Option ' + q.correctOption.replace('option', '') : 'N/A'}</div>
+              `
+              if (q.solutionText) {
+                html += `
+                  <div style="margin-top: 8px;">
+                    <span style="font-weight: bold;">Solution:</span>
+                    <div style="margin-top: 4px;">${q.solutionText}</div>
+                  </div>
+                `
+              }
+              html += `</div>`
+            }
+            html += `</div>` // end question block
+          })
+
+          html += `
+                </div>
+              </div>
+            </div>
+          `
+          container.innerHTML = html
+
+          // Load html2pdf dynamically
+          const html2pdfModule = await import('html2pdf.js')
+          const html2pdf = html2pdfModule.default
+          const safeName = (test.title || 'Test').replace(/[^a-zA-Z0-9_ -]/g, '_').substring(0, 50)
+          
+          const opt = {
+            margin:       10,
+            filename:     `${safeName}${withSol ? '_With_Solutions' : '_Questions_Only'}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          }
+          
+          await html2pdf().set(opt).from(container).save()
+          document.body.removeChild(container)
+          toast.success('PDF downloaded successfully!', { id: toastId })
+        } catch (err) {
+          console.error(err)
+          toast.error('Failed to generate PDF', { id: toastId })
+        }
         break
       }
       case 'reevaluate_marks':
