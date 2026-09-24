@@ -127,3 +127,41 @@ export async function DELETE(
 
 
 
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = await requireAdminOrTeacher(request)
+    if (authResult.error) {
+      return NextResponse.json({ success: false, error: authResult.error }, { status: authResult.status })
+    }
+    const auth = authResult.user
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { id } = await params
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Test ID is required' }, { status: 400 })
+    }
+
+    const test = await prisma.test.findUnique({
+      where: { id },
+      include: {
+        questions: {
+          orderBy: { sortOrder: 'asc' }
+        },
+        testSeries: true
+      }
+    })
+
+    if (!test || (test.organizationId !== auth.orgId && test.testSeries?.organizationId !== auth.orgId)) {
+      return NextResponse.json({ success: false, error: 'Test not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, data: test })
+  } catch (error) {
+    console.error('Error fetching test:', error)
+    return NextResponse.json({ success: false, error: 'Failed to fetch test' }, { status: 500 })
+  }
+}
