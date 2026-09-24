@@ -681,7 +681,7 @@ export default function TakeTest() {
       {/* Top Header */}
       <div className="bg-indigo-700 text-white px-4 py-2 flex items-center justify-between shrink-0 shadow-md z-10">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold tracking-wide truncate max-w-md">{test.title}</h1>
+          <button onClick={() => setStudentPage('my-tests')} className="p-1 -ml-1 text-indigo-200 hover:text-white transition-colors rounded hover:bg-indigo-600/50" title="Go Back"><ChevronLeft className="size-6" /></button><h1 className="text-lg font-bold tracking-wide truncate max-w-md">{test.title}</h1>
         </div>
         
         <div className="flex items-center gap-4">
