@@ -310,54 +310,28 @@ export function TestSeriesContentManager({
       case 'export_pdf_without_sol': {
         const withSol = action === 'export_pdf_with_sol'
         const toastId = `pdf-${test.id}`
-        toast.loading(`Generating PDF in background...`, { id: toastId })
         try {
-          const iframe = document.createElement('iframe')
-          iframe.style.position = 'absolute'
-          iframe.style.left = '-9999px'
-          iframe.style.top = '-9999px'
-          iframe.style.width = '1000px'
-          iframe.style.height = '1000px'
-          
-          // Wait for message from iframe
-          const messageHandler = (event: MessageEvent) => {
-            if (event.data?.type === 'pdf-done') {
-              window.removeEventListener('message', messageHandler)
-              document.body.removeChild(iframe)
-              
-              // Trigger download from parent window (bypasses iframe sandbox/restrictions)
-              const link = document.createElement('a')
-              link.href = event.data.data
-              link.download = event.data.filename || 'Test.pdf'
-              document.body.appendChild(link)
-              link.click()
-              document.body.removeChild(link)
-
-              toast.success('PDF downloaded successfully!', { id: toastId })
-            } else if (event.data?.type === 'pdf-error') {
-              window.removeEventListener('message', messageHandler)
-              document.body.removeChild(iframe)
-              console.error('PDF Error:', event.data.message)
-              toast.error('Failed to generate PDF: ' + (event.data.message || 'Unknown error'), { id: toastId })
-            } else if (event.data === 'pdf-done') {
-               // Fallback for old cached iframe response
-               window.removeEventListener('message', messageHandler)
-               document.body.removeChild(iframe)
-               toast.success('PDF downloaded successfully!', { id: toastId })
-            } else if (event.data === 'pdf-error') {
-               window.removeEventListener('message', messageHandler)
-               document.body.removeChild(iframe)
-               toast.error('Failed to generate PDF', { id: toastId })
-            }
+          toast.loading(`Generating PDF ${withSol ? 'with solutions' : ''}...`, { id: toastId })
+          const res = await apiFetch(`/api/teacher/tests/${test.id}/pdf?solutions=${withSol}`)
+          if (!res.ok) {
+            const errText = await res.text()
+            toast.error(`PDF generation failed: ${errText.substring(0, 100)}`, { id: toastId })
+            break
           }
-          
-          window.addEventListener('message', messageHandler)
-          
-          iframe.src = `/api/teacher/tests/${test.id}/pdf-html?solutions=${withSol}`
-          document.body.appendChild(iframe)
+          const blob = await res.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          const safeName = (test.title || 'Test').replace(/[^a-zA-Z0-9_ -]/g, '_').substring(0, 50)
+          a.download = `${safeName}${withSol ? '_With_Solutions' : '_Questions_Only'}.pdf`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+          toast.success('PDF downloaded successfully!', { id: toastId })
         } catch (err) {
           console.error(err)
-          toast.error('Failed to initiate PDF generation', { id: toastId })
+          toast.error('Failed to download PDF', { id: toastId })
         }
         break
       }

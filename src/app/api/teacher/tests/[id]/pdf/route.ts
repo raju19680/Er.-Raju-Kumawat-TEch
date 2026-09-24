@@ -69,26 +69,32 @@ export async function GET(
 
     const sanitizeText = (html: string | null | undefined): string => {
       if (!html) return ''
-      return html
+      
+      // Basic table preservation by adding tabs/spaces
+      let text = html
+        .replace(/<\/td>\s*<td[^>]*>/gi, '    |    ') // replace adjacent TDs with a separator
+        .replace(/<\/tr>/gi, '\n')
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/p>/gi, '\n')
         .replace(/<\/div>/gi, '\n')
-        .replace(/<[^>]*>/g, '')
+        .replace(/<[^>]*>/g, '') // remove remaining tags
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/[\u2018\u2019]/g, "'") // Smart single quotes
-        .replace(/[\u201C\u201D]/g, '"') // Smart double quotes
-        .replace(/[\u2013\u2014]/g, '-') // En and em dashes
-        .replace(/\u2026/g, '...') // Ellipsis
-        .replace(/\u2022/g, '-') // Bullet
-        .replace(/\u00A0/g, ' ') // Non-breaking space
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\u2026/g, '...')
+        .replace(/\u2022/g, '-')
+        .replace(/\u00A0/g, ' ')
         .replace(/[ \t]+/g, ' ') // Collapse spaces but preserve newlines
         .replace(/\n{3,}/g, '\n\n') // Limit consecutive newlines
         .trim()
+        
+      return text
     }
 
     // Safe width measurement that handles encoding errors
@@ -344,10 +350,29 @@ export async function GET(
       }
     }
 
-    // ─── Page numbers ───
+    // ─── Watermark and Page numbers ───
     const pageCount = pdfDoc.getPageCount()
+    const watermarkFont = customFont || helveticaBold
     for (let p = 0; p < pageCount; p++) {
       const pg = pdfDoc.getPage(p)
+      
+      // Draw watermark
+      try {
+        const textWidth = safeTextWidth('Er. Raju Kumawat', watermarkFont, 60)
+        pg.drawText('Er. Raju Kumawat', {
+          x: PAGE_WIDTH / 2 - (textWidth / 2) + 50,
+          y: PAGE_HEIGHT / 2 - 50,
+          size: 60,
+          font: watermarkFont,
+          color: rgb(0.5, 0.5, 0.5),
+          opacity: 0.15,
+          rotate: { type: 'degrees', angle: 45 },
+        })
+      } catch (e) {
+        console.error('Failed to draw watermark', e)
+      }
+
+      // Draw page number
       pg.drawText(`Page ${p + 1} of ${pageCount}`, {
         x: PAGE_WIDTH - 120,
         y: 30,
