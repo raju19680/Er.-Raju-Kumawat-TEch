@@ -52,6 +52,8 @@ export async function GET(
         numberOfQuestions: true,
         totalMarks: true,
         testMode: true,
+        isPdfTest: true,
+        pdfUrl: true,
         attachPdf: true,
         isLive: true,
         isLocked: true,

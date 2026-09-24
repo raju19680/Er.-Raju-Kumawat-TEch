@@ -268,7 +268,7 @@ function DrawerFormContent({
   useEffect(() => {
     async function loadSeries() {
       try {
-        const res = await apiFetchJSON('/api/test-series')
+        const res = await apiFetchJSON('/api/teacher/test-series')
         if (res.series) {
           setSeriesOptions(res.series.map((s: any) => ({ id: s.id, title: s.title })))
         }
