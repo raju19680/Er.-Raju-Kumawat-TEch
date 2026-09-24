@@ -43,15 +43,15 @@ export async function GET(
     const pdfDoc = await PDFDocument.create()
     pdfDoc.registerFontkit(fontkit)
 
-    // Try to embed Noto Sans Devanagari for Hindi support
+    // Try to embed Noto Sans Devanagari (Static) for Hindi support
     let customFont: any = null
     let customFontBold: any = null
     try {
-      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari.ttf')
+      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf')
       if (fs.existsSync(fontPath)) {
         const fontBytes = fs.readFileSync(fontPath)
         customFont = await pdfDoc.embedFont(fontBytes, { subset: true })
-        customFontBold = customFont // Variable font, same for bold
+        customFontBold = customFont // Using regular for bold too since we only downloaded regular
       }
     } catch (e) {
       console.warn('Could not load custom font, falling back to Helvetica:', e)
@@ -105,7 +105,8 @@ export async function GET(
     const safeDrawText = (page: any, text: string, options: any) => {
       try {
         page.drawText(text, options)
-      } catch {
+      } catch (e) {
+        console.warn('Font rendering failed for:', text, e)
         // If the font can't render the text, try fallback
         try {
           // Strip non-ASCII for fallback rendering
