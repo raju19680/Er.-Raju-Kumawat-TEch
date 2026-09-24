@@ -71,6 +71,8 @@ export async function GET(
       if (!html) return ''
       return html
         .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
         .replace(/<[^>]*>/g, '')
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
@@ -84,7 +86,8 @@ export async function GET(
         .replace(/\u2026/g, '...') // Ellipsis
         .replace(/\u2022/g, '-') // Bullet
         .replace(/\u00A0/g, ' ') // Non-breaking space
-        .replace(/\s+/g, ' ')
+        .replace(/[ \t]+/g, ' ') // Collapse spaces but preserve newlines
+        .replace(/\n{3,}/g, '\n\n') // Limit consecutive newlines
         .trim()
     }
 
