@@ -710,9 +710,9 @@ export default function TakeTest() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Main Area */}
-        <div className="flex-1 flex flex-col bg-white overflow-hidden relative shadow-[0_0_15px_rgba(0,0,0,0.05)] z-0">
+        <div className="flex-1 flex flex-col bg-white overflow-hidden relative shadow-[0_0_15px_rgba(0,0,0,0.05)] z-0 min-h-0">
           
           {/* Sections Header */}
           <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50">
@@ -756,14 +756,14 @@ export default function TakeTest() {
           </div>
 
           {/* Question Content */}
-          <div className="flex-1 flex overflow-hidden bg-white">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white min-h-0">
             {test.isPdfTest && test.pdfUrl && (
-              <div className="w-1/2 md:w-3/5 border-r border-gray-200 h-full relative">
+              <div className="w-full md:w-3/5 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-gray-200 relative min-h-0 overflow-auto">
                  <iframe src={`${test.pdfUrl}#toolbar=0`} className="w-full h-full border-0" />
               </div>
             )}
             
-            <div className={`overflow-y-auto p-6 ${test.isPdfTest ? 'w-1/2 md:w-2/5' : 'flex-1 max-w-4xl'} space-y-6`}>
+            <div className={`overflow-y-auto p-4 md:p-6 ${test.isPdfTest ? 'w-full md:w-2/5 h-1/2 md:h-full' : 'flex-1 max-w-4xl'} space-y-6 min-h-0`}>
               {!test.isPdfTest && (
                 <>
                   {question.heading && (
@@ -1166,3 +1166,5 @@ export default function TakeTest() {
     </div>
   )
 }
+
+
