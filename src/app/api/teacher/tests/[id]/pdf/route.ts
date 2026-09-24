@@ -47,10 +47,10 @@ export async function GET(
     let customFont: any = null
     let customFontBold: any = null
     try {
-      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'Hind-Regular.ttf')
+      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'mangal.ttf')
       if (fs.existsSync(fontPath)) {
         const fontBytes = fs.readFileSync(fontPath)
-        customFont = await pdfDoc.embedFont(fontBytes, { subset: false }) // Disable subsetting to speed up generation
+        customFont = await pdfDoc.embedFont(fontBytes, { subset: true }) // Enable subsetting again for smaller file size
         customFontBold = customFont // Using regular for bold too since we only downloaded regular
       }
     } catch (e) {
