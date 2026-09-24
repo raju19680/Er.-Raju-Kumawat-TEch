@@ -756,25 +756,35 @@ export default function TakeTest() {
           </div>
 
           {/* Question Content */}
-          <div className="flex-1 overflow-y-auto p-6 bg-white">
-            <div className="max-w-4xl space-y-6">
-              {question.heading && (
-                <p className="text-sm font-semibold text-indigo-700 bg-indigo-50 p-2 rounded-md border border-indigo-100">{question.heading}</p>
-              )}
-              {question.directive && (
-                <p className="text-sm font-medium text-gray-600 italic bg-gray-50 p-2 border-l-4 border-gray-300">{question.directive}</p>
-              )}
-              
-              <div className="text-base text-gray-900 leading-relaxed space-y-4">
-                <div dangerouslySetInnerHTML={{ __html: question.title.replace(/\n/g, '<br/>') }} />
-                
-                {/* Images */}
-                <div className="space-y-4">
-                  {question.image1 && <img src={question.image1} alt="Question Image 1" className="max-w-full h-auto rounded border" />}
-                  {question.image2 && <img src={question.image2} alt="Question Image 2" className="max-w-full h-auto rounded border" />}
-                  {question.image3 && <img src={question.image3} alt="Question Image 3" className="max-w-full h-auto rounded border" />}
-                </div>
+          <div className="flex-1 flex overflow-hidden bg-white">
+            {test.isPdfTest && test.pdfUrl && (
+              <div className="w-1/2 md:w-3/5 border-r border-gray-200 h-full relative">
+                 <iframe src={`${test.pdfUrl}#toolbar=0`} className="w-full h-full border-0" />
               </div>
+            )}
+            
+            <div className={`overflow-y-auto p-6 ${test.isPdfTest ? 'w-1/2 md:w-2/5' : 'flex-1 max-w-4xl'} space-y-6`}>
+              {!test.isPdfTest && (
+                <>
+                  {question.heading && (
+                    <p className="text-sm font-semibold text-indigo-700 bg-indigo-50 p-2 rounded-md border border-indigo-100">{question.heading}</p>
+                  )}
+                  {question.directive && (
+                    <p className="text-sm font-medium text-gray-600 italic bg-gray-50 p-2 border-l-4 border-gray-300">{question.directive}</p>
+                  )}
+                  
+                  <div className="text-base text-gray-900 leading-relaxed space-y-4">
+                    <div dangerouslySetInnerHTML={{ __html: (question.title || '').replace(/\n/g, '<br/>') }} />
+                    
+                    {/* Images */}
+                    <div className="space-y-4">
+                      {question.image1 && <img src={question.image1} alt="Question Image 1" className="max-w-full h-auto rounded border" />}
+                      {question.image2 && <img src={question.image2} alt="Question Image 2" className="max-w-full h-auto rounded border" />}
+                      {question.image3 && <img src={question.image3} alt="Question Image 3" className="max-w-full h-auto rounded border" />}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Options */}
               <div className="mt-8 space-y-3">
@@ -793,7 +803,7 @@ export default function TakeTest() {
                     {optionsList.map((num) => {
                       const text = (question as any)[`option${num}`]
                       const img = (question as any)[`option${num}Image`]
-                      if (!text && !img) return null
+                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
                       return (
                         <div
                           key={num}
@@ -805,6 +815,7 @@ export default function TakeTest() {
                         >
                           <RadioGroupItem value={num} id={`q${question.id}-${num}`} className="mt-1" disabled={isOmr} />
                           <Label htmlFor={`q${question.id}-${num}`} className={`flex-1 text-base text-gray-800 leading-relaxed font-normal ${isOmr ? 'cursor-default' : 'cursor-pointer'}`}>
+                            {test.isPdfTest && !text && !img && <span className="font-semibold text-gray-500">Option {['A','B','C','D','E'][parseInt(num)-1]}</span>}
                             {text && <div dangerouslySetInnerHTML={{ __html: text.replace(/\n/g, '<br/>') }} />}
                             {img && <img src={img} alt={`Option ${num}`} className="mt-2 max-w-full h-auto rounded border" />}
                           </Label>
@@ -817,7 +828,7 @@ export default function TakeTest() {
                     {optionsList.map((num) => {
                       const text = (question as any)[`option${num}`]
                       const img = (question as any)[`option${num}Image`]
-                      if (!text && !img) return null
+                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
                       const selected = (answers[question.id] || '').split(',').includes(num)
                       return (
                         <div

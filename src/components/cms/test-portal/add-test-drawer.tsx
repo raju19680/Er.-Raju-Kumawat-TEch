@@ -264,6 +264,23 @@ function DrawerFormContent({
 
   const [profiles, setProfiles] = useState<any[]>([])
   const [themes, setThemes] = useState<any[]>([])
+
+  useEffect(() => {
+    async function loadSeries() {
+      try {
+        const res = await apiFetchJSON('/api/test-series')
+        if (res.series) {
+          setSeriesOptions(res.series.map((s: any) => ({ id: s.id, title: s.title })))
+        }
+      } catch (err) {
+        toast.error('Failed to load test series')
+      } finally {
+        setLoadingSeries(false)
+      }
+    }
+    loadSeries()
+  }, [])
+
   const updateField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
