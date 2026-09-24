@@ -130,9 +130,9 @@ model Student {
   bookmarks                Bookmark[]
   certificates             Certificate[]
   collections              Collection[]
+  courseNotes              CourseNote[]
   deviceSessions           DeviceSession[]
   lessonProgress           LessonProgress[]
-  courseNotes              CourseNote[]
   orders                   Order[]
   purchasedCourses         PurchasedCourse[]
   purchasedDigitalProducts PurchasedDigitalProduct[]
@@ -226,10 +226,10 @@ model Course {
   validityEndDate DateTime?
   validityMonths  Int?
   validityType    String            @default("lifetime")
-  seoTitle        String?
-  seoDescription  String?
-  richSnippets    Boolean           @default(false)
   parentId        String?
+  richSnippets    Boolean           @default(false)
+  seoDescription  String?
+  seoTitle        String?
   assignments     Assignment[]
   certificates    Certificate[]
   organization    Organization      @relation(fields: [organizationId], references: [id])
@@ -265,18 +265,18 @@ model CourseLesson {
   fileUrl            String?
   notes              String?
   isFree             Boolean            @default(false)
-  allowPdfDownload   Boolean            @default(false)
-  securePdfWithPhone Boolean            @default(false)
-  isOptional         Boolean            @default(false)
   sortOrder          Int                @default(0)
   moduleId           String
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   translationStatus  String             @default("none")
+  allowPdfDownload   Boolean            @default(false)
+  securePdfWithPhone Boolean            @default(false)
+  isOptional         Boolean            @default(false)
   checkpointQuiz     CheckpointQuiz?
   module             CourseModule       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  progress           LessonProgress[]
   courseNotes        CourseNote[]
+  progress           LessonProgress[]
   translations       VideoTranslation[]
 }
 
@@ -297,10 +297,10 @@ model LessonProgress {
   lessonId     String
   courseId     String
   status       String       @default("not_started")
-  lastPosition String?
   completedAt  DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+  lastPosition String?
   lesson       CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   student      Student      @relation(fields: [studentId], references: [id])
 
@@ -312,13 +312,13 @@ model CourseNote {
   studentId      String
   lessonId       String
   content        String
-  timestamp      Int? // Video time in seconds when note was taken
+  timestamp      Int?
   organizationId String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   lesson         CourseLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  student        Student      @relation(fields: [studentId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
+  student        Student      @relation(fields: [studentId], references: [id])
 }
 
 model TestSeries {
@@ -425,9 +425,10 @@ model Test {
   pdfPasswordProtected Boolean       @default(false)
   themeId              String?
   themeSnapshot        String?
-  seoTitle             String?
-  seoDescription       String?
   richSnippets         Boolean       @default(true)
+  seoDescription       String?
+  seoTitle             String?
+  passages             Passage[]
   questions            Question[]
   chapter              Chapter?      @relation(fields: [chapterId], references: [id])
   concept              Concept?      @relation(fields: [conceptId], references: [id])
@@ -437,7 +438,6 @@ model Test {
   theme                ExamTheme?    @relation(fields: [themeId], references: [id])
   testAttempts         TestAttempt[]
   testSections         TestSection[]
-  passages             Passage[]
 }
 
 model TestSection {
@@ -461,58 +461,57 @@ model Passage {
   text      String
   image     String?
   testId    String
-  test      Test       @relation(fields: [testId], references: [id])
-  questions Question[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  test      Test       @relation(fields: [testId], references: [id])
+  questions Question[]
 }
 
 model Question {
-  id              String   @id @default(cuid())
-  type            String   @default("mcq")
-  heading         String?
-  directive       String?
-  title           String
-  titleHi         String?
-  image1          String?
-  image2          String?
-  image3          String?
-  option1         String?
-  option2         String?
-  option3         String?
-  option4         String?
-  option5         String?
-  option1Hi       String?
-  option2Hi       String?
-  option3Hi       String?
-  option4Hi       String?
-  option5Hi       String?
-  option1Image    String?
-  option2Image    String?
-  option3Image    String?
-  option4Image    String?
-  option5Image    String?
-  correctOption   String?
-  solutionHeading String?
-  solutionImage1  String?
-  solutionImage2  String?
-  solutionVideo   String?
-  solutionText    String?
-  solutionTextHi  String?
-  section         String?
-  positiveMarks   Float    @default(1)
-  negativeMarks   Float    @default(0)
-  partialMarks    Float    @default(0)
-  sortOrder       Int      @default(0)
-  testId          String
-  passageId       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
+  id                String             @id @default(cuid())
+  type              String             @default("mcq")
+  heading           String?
+  directive         String?
+  title             String
+  image1            String?
+  image2            String?
+  image3            String?
+  option1           String?
+  option2           String?
+  option3           String?
+  option4           String?
+  option5           String?
+  option1Image      String?
+  option2Image      String?
+  option3Image      String?
+  option4Image      String?
+  option5Image      String?
+  correctOption     String?
+  solutionHeading   String?
+  solutionImage1    String?
+  solutionImage2    String?
+  solutionVideo     String?
+  solutionText      String?
+  section           String?
+  positiveMarks     Float              @default(1)
+  negativeMarks     Float              @default(0)
+  sortOrder         Int                @default(0)
+  testId            String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   examProfileId     String?
+  option1Hi         String?
+  option2Hi         String?
+  option3Hi         String?
+  option4Hi         String?
+  option5Hi         String?
+  partialMarks      Float              @default(0)
+  passageId         String?
+  solutionTextHi    String?
+  titleHi           String?
   examProfile       ExamProfile?       @relation(fields: [examProfileId], references: [id])
-  test              Test               @relation(fields: [testId], references: [id])
   passage           Passage?           @relation(fields: [passageId], references: [id])
+  test              Test               @relation(fields: [testId], references: [id])
   reportedQuestions ReportedQuestion[]
 }
 
@@ -526,13 +525,13 @@ model TestAttempt {
   percentile      Float?
   timeTaken       Int       @default(0)
   status          String    @default("in_progress")
-  isPractice      Boolean   @default(false)
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
   answers         String?
   omrImageUrl     String?
-  timePerQuestion String?
+  isPractice      Boolean   @default(false)
   themeSnapshot   String?
+  timePerQuestion String?
   student         Student   @relation(fields: [studentId], references: [id])
   test            Test      @relation(fields: [testId], references: [id])
 }
@@ -645,7 +644,7 @@ model ProductView {
   studentId      String?
   sessionId      String?
   productId      String
-  productType    String // course, test_series, digital_product
+  productType    String
   views          Int      @default(1)
   organizationId String
   createdAt      DateTime @default(now())
@@ -750,9 +749,6 @@ model DigitalProduct {
   edition        String?
   format         String?
   isbn           String?
-  seoTitle       String?
-  seoDescription String?
-  richSnippets   Boolean                   @default(false)
   language       String?
   level          String?
   pages          Int?
@@ -763,6 +759,9 @@ model DigitalProduct {
   totalQuestions Int?
   totalTests     Int?
   validityDays   Int?
+  richSnippets   Boolean                   @default(false)
+  seoDescription String?
+  seoTitle       String?
   organization   Organization              @relation(fields: [organizationId], references: [id])
   purchasedBy    PurchasedDigitalProduct[]
 }
@@ -1467,43 +1466,38 @@ model ExamRule {
 }
 
 model ExamTheme {
-  id             String  @id @default(cuid())
-  name           String
-  code           String? @unique
-  description    String?
-  themeType      String  @default("exam")
-  language       String  @default("english")
-  supportedModes String  @default("[\"cbt\"]")
-  status         String  @default("draft")
-  version        Int     @default(1)
-
-  // Legacy color fields (preserved for backward compatibility)
-  primaryColor    String  @default("#d97706")
-  secondaryColor  String  @default("#1f2937")
-  backgroundColor String  @default("#f3f4f6")
-  headerColor     String  @default("#ffffff")
-  footerColor     String  @default("#ffffff")
-  fontFamily      String  @default("Inter")
+  id              String        @id @default(cuid())
+  name            String
+  primaryColor    String        @default("#d97706")
+  secondaryColor  String        @default("#1f2937")
+  backgroundColor String        @default("#f3f4f6")
+  headerColor     String        @default("#ffffff")
+  footerColor     String        @default("#ffffff")
+  fontFamily      String        @default("Inter")
   logo            String?
   watermark       String?
-
-  // Full theme configuration as validated JSON
-  typography     String?
-  colorTokens    String?
-  questionStyle  String?
-  optionStyle    String?
-  cbtSettings    String?
-  pdfSettings    String?
-  resultSettings String?
-  brandingConfig String?
-  accessibility  String?
-
-  organizationId String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  examProfiles   ExamProfile[]
-  tests          Test[]
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId  String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  accessibility   String?
+  brandingConfig  String?
+  cbtSettings     String?
+  code            String?       @unique
+  colorTokens     String?
+  description     String?
+  language        String        @default("english")
+  optionStyle     String?
+  pdfSettings     String?
+  questionStyle   String?
+  resultSettings  String?
+  status          String        @default("draft")
+  supportedModes  String        @default("[\"cbt\"]")
+  themeType       String        @default("exam")
+  typography      String?
+  version         Int           @default(1)
+  examProfiles    ExamProfile[]
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tests           Test[]
 }
 
 model OmrTemplate {

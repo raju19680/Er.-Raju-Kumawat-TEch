@@ -1,0 +1,19 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <script src="/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <div id="content">Hello World</div>
+  <script>
+    window.onload = function() {
+      try {
+        console.log(typeof html2pdf().from(document.getElementById('content')).outputPdf);
+        console.log(typeof html2pdf().from(document.getElementById('content')).output);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+  </script>
+</body>
+</html>

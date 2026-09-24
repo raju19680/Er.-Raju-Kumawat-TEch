@@ -121,12 +121,24 @@ export async function GET(
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
               };
               
-              // We will pass the data URI to parent to ensure it downloads even if iframe downloads are blocked
-              html2pdf().set(opt).from(element).outputPdf('datauristring').then(function(pdfDataUri) {
-                 window.parent.postMessage({ type: 'pdf-done', data: pdfDataUri, filename: '${filename}' }, '*');
-              }).catch(function(err) {
-                 window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
-              });
+              var worker = html2pdf().set(opt).from(element);
+              
+              // Depending on html2pdf version, output or outputPdf is available
+              if (typeof worker.outputPdf === 'function') {
+                worker.outputPdf('datauristring').then(function(pdfDataUri) {
+                   window.parent.postMessage({ type: 'pdf-done', data: pdfDataUri, filename: '${filename}' }, '*');
+                }).catch(function(err) {
+                   window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
+                });
+              } else if (typeof worker.output === 'function') {
+                worker.output('datauristring').then(function(pdfDataUri) {
+                   window.parent.postMessage({ type: 'pdf-done', data: pdfDataUri, filename: '${filename}' }, '*');
+                }).catch(function(err) {
+                   window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
+                });
+              } else {
+                window.parent.postMessage({ type: 'pdf-error', message: 'output method not found in html2pdf' }, '*');
+              }
             } catch (err) {
               window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
             }
