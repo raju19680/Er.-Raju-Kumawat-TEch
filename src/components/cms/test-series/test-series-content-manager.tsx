@@ -321,14 +321,33 @@ export function TestSeriesContentManager({
           
           // Wait for message from iframe
           const messageHandler = (event: MessageEvent) => {
-            if (event.data === 'pdf-done') {
+            if (event.data?.type === 'pdf-done') {
               window.removeEventListener('message', messageHandler)
               document.body.removeChild(iframe)
+              
+              // Trigger download from parent window (bypasses iframe sandbox/restrictions)
+              const link = document.createElement('a')
+              link.href = event.data.data
+              link.download = event.data.filename || 'Test.pdf'
+              document.body.appendChild(link)
+              link.click()
+              document.body.removeChild(link)
+
               toast.success('PDF downloaded successfully!', { id: toastId })
-            } else if (event.data === 'pdf-error') {
+            } else if (event.data?.type === 'pdf-error') {
               window.removeEventListener('message', messageHandler)
               document.body.removeChild(iframe)
-              toast.error('Failed to generate PDF', { id: toastId })
+              console.error('PDF Error:', event.data.message)
+              toast.error('Failed to generate PDF: ' + (event.data.message || 'Unknown error'), { id: toastId })
+            } else if (event.data === 'pdf-done') {
+               // Fallback for old cached iframe response
+               window.removeEventListener('message', messageHandler)
+               document.body.removeChild(iframe)
+               toast.success('PDF downloaded successfully!', { id: toastId })
+            } else if (event.data === 'pdf-error') {
+               window.removeEventListener('message', messageHandler)
+               document.body.removeChild(iframe)
+               toast.error('Failed to generate PDF', { id: toastId })
             }
           }
           

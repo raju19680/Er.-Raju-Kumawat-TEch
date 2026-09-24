@@ -43,7 +43,7 @@ export async function GET(
           table, th, td { border: 1px solid black; }
           th, td { padding: 8px; text-align: left; }
         </style>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+        <script src="/html2pdf.bundle.min.js"></script>
       </head>
       <body>
         <div id="pdf-content" style="padding: 20px; position: relative; background: white;">
@@ -107,19 +107,29 @@ export async function GET(
         </div>
         <script>
           window.onload = function() {
-            var element = document.getElementById('pdf-content');
-            var opt = {
-              margin:       10,
-              filename:     '${filename}',
-              image:        { type: 'jpeg', quality: 0.98 },
-              html2canvas:  { scale: 2, useCORS: true, letterRendering: true, windowWidth: 1000 },
-              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-            html2pdf().set(opt).from(element).save().then(function() {
-               window.parent.postMessage('pdf-done', '*');
-            }).catch(function(err) {
-               window.parent.postMessage('pdf-error', '*');
-            });
+            try {
+              if (typeof html2pdf === 'undefined') {
+                window.parent.postMessage({ type: 'pdf-error', message: 'html2pdf library failed to load' }, '*');
+                return;
+              }
+              var element = document.getElementById('pdf-content');
+              var opt = {
+                margin:       10,
+                filename:     '${filename}',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, letterRendering: true, windowWidth: 1000 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+              };
+              
+              // We will pass the data URI to parent to ensure it downloads even if iframe downloads are blocked
+              html2pdf().set(opt).from(element).outputPdf('datauristring').then(function(pdfDataUri) {
+                 window.parent.postMessage({ type: 'pdf-done', data: pdfDataUri, filename: '${filename}' }, '*');
+              }).catch(function(err) {
+                 window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
+              });
+            } catch (err) {
+              window.parent.postMessage({ type: 'pdf-error', message: err.toString() }, '*');
+            }
           };
         </script>
       </body>
