@@ -309,30 +309,8 @@ export function TestSeriesContentManager({
       case 'export_pdf_with_sol':
       case 'export_pdf_without_sol': {
         const withSol = action === 'export_pdf_with_sol'
-        const toastId = `pdf-${test.id}`
-        try {
-          toast.loading(`Generating PDF ${withSol ? 'with solutions' : ''}...`, { id: toastId })
-          const res = await apiFetch(`/api/teacher/tests/${test.id}/pdf?solutions=${withSol}`)
-          if (!res.ok) {
-            const errText = await res.text()
-            toast.error(`PDF generation failed: ${errText.substring(0, 100)}`, { id: toastId })
-            break
-          }
-          const blob = await res.blob()
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          const safeName = (test.title || 'Test').replace(/[^a-zA-Z0-9_ -]/g, '_').substring(0, 50)
-          a.download = `${safeName}${withSol ? '_With_Solutions' : '_Questions_Only'}.pdf`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-          toast.success('PDF downloaded successfully!', { id: toastId })
-        } catch (err) {
-          console.error(err)
-          toast.error('Failed to download PDF', { id: toastId })
-        }
+        toast.success('Opening PDF generator in new tab...')
+        window.open(`/print-test/${test.id}?solutions=${withSol}`, '_blank')
         break
       }
       case 'reevaluate_marks':
