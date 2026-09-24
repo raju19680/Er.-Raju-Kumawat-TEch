@@ -319,17 +319,31 @@ export function TestSeriesContentManager({
 
           toast.loading(`Generating PDF...`, { id: toastId })
           
-          // Create invisible container
-          const container = document.createElement('div')
-          container.style.position = 'absolute'
-          container.style.left = '-9999px'
-          container.style.top = '-9999px'
-          document.body.appendChild(container)
+          // Use an iframe to isolate CSS so html2canvas doesn't choke on lab() colors in the parent DOM
+          const iframe = document.createElement('iframe')
+          iframe.style.position = 'absolute'
+          iframe.style.left = '-9999px'
+          iframe.style.top = '-9999px'
+          iframe.style.width = '1000px'
+          iframe.style.height = '1000px'
+          document.body.appendChild(iframe)
           
+          const iframeDoc = iframe.contentWindow?.document
+          if (!iframeDoc) throw new Error('Failed to create iframe')
+
           const brandName = "Er. Raju Kumawat"
           
           let html = `
-            <div style="font-family: sans-serif; color: black; background: white; padding: 20px; position: relative;">
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <style>
+                body { font-family: sans-serif; color: black; background: white; margin: 0; padding: 0; }
+                * { box-sizing: border-box; }
+              </style>
+            </head>
+            <body>
+            <div id="pdf-content" style="padding: 20px; position: relative; background: white;">
               <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; opacity: 0.1; pointer-events: none; overflow: hidden; z-index: 0;">
                 <h1 style="font-size: 150px; transform: rotate(-45deg); white-space: nowrap;">${brandName}</h1>
               </div>
@@ -388,10 +402,13 @@ export function TestSeriesContentManager({
                 </div>
               </div>
             </div>
+            </body>
+            </html>
           `
-          container.innerHTML = html
+          iframeDoc.open()
+          iframeDoc.write(html)
+          iframeDoc.close()
 
-          // Load html2pdf dynamically
           const html2pdfModule = await import('html2pdf.js')
           const html2pdf = html2pdfModule.default
           const safeName = (test.title || 'Test').replace(/[^a-zA-Z0-9_ -]/g, '_').substring(0, 50)
@@ -400,12 +417,14 @@ export function TestSeriesContentManager({
             margin:       10,
             filename:     `${safeName}${withSol ? '_With_Solutions' : '_Questions_Only'}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true, windowWidth: 1000 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
           }
           
-          await html2pdf().set(opt).from(container).save()
-          document.body.removeChild(container)
+          const element = iframeDoc.getElementById('pdf-content')
+          
+          await html2pdf().set(opt).from(element).save()
+          document.body.removeChild(iframe)
           toast.success('PDF downloaded successfully!', { id: toastId })
         } catch (err) {
           console.error(err)
