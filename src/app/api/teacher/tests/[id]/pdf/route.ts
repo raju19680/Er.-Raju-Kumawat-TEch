@@ -67,7 +67,6 @@ export async function GET(
     // Check if text has non-ASCII (Hindi/Devanagari)
     const hasNonAscii = (text: string) => /[^\x00-\x7F]/.test(text)
 
-    // Strip HTML tags and decode entities
     const sanitizeText = (html: string | null | undefined): string => {
       if (!html) return ''
       return html
@@ -79,6 +78,12 @@ export async function GET(
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
+        .replace(/[\u2018\u2019]/g, "'") // Smart single quotes
+        .replace(/[\u201C\u201D]/g, '"') // Smart double quotes
+        .replace(/[\u2013\u2014]/g, '-') // En and em dashes
+        .replace(/\u2026/g, '...') // Ellipsis
+        .replace(/\u2022/g, '-') // Bullet
+        .replace(/\u00A0/g, ' ') // Non-breaking space
         .replace(/\s+/g, ' ')
         .trim()
     }
@@ -101,19 +106,27 @@ export async function GET(
       return bold ? fontBold : fontRegular
     }
 
-    // Safe drawText that handles encoding errors
+    // Safe drawText that handles encoding errors gracefully word-by-word
     const safeDrawText = (page: any, text: string, options: any) => {
       try {
         page.drawText(text, options)
       } catch (e) {
-        // If the font can't render the text, try fallback
-        try {
-          // Strip non-ASCII for fallback rendering
-          const asciiOnly = text.replace(/[^\x20-\x7E]/g, '?')
-          const fallbackFont = options.font === fontBold ? helveticaBold : helveticaRegular
-          page.drawText(asciiOnly, { ...options, font: fallbackFont })
-        } catch (e2) {
-          // Silently fail to keep things fast
+        // If the whole string fails, try word by word to isolate the crash
+        const words = text.split(' ')
+        let currentX = options.x || 0
+        const fontSize = options.size || 12
+        const fallbackFont = options.font === fontBold ? helveticaBold : helveticaRegular
+
+        for (const word of words) {
+          try {
+            page.drawText(word, { ...options, x: currentX })
+            currentX += safeTextWidth(word + ' ', options.font, fontSize)
+          } catch (e2) {
+            // Only replace the crashed word with ?
+            const asciiOnly = word.replace(/[^\x20-\x7E]/g, '?')
+            page.drawText(asciiOnly, { ...options, font: fallbackFont, x: currentX })
+            currentX += fallbackFont.widthOfTextAtSize(asciiOnly + ' ', fontSize)
+          }
         }
       }
     }
