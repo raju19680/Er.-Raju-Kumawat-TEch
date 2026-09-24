@@ -47,10 +47,10 @@ export async function GET(
     let customFont: any = null
     let customFontBold: any = null
     try {
-      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansDevanagari-Regular.ttf')
+      const fontPath = path.join(process.cwd(), 'public', 'fonts', 'Hind-Regular.ttf')
       if (fs.existsSync(fontPath)) {
         const fontBytes = fs.readFileSync(fontPath)
-        customFont = await pdfDoc.embedFont(fontBytes, { subset: true })
+        customFont = await pdfDoc.embedFont(fontBytes, { subset: false }) // Disable subsetting to speed up generation
         customFontBold = customFont // Using regular for bold too since we only downloaded regular
       }
     } catch (e) {
@@ -106,7 +106,6 @@ export async function GET(
       try {
         page.drawText(text, options)
       } catch (e) {
-        console.warn('Font rendering failed for:', text, e)
         // If the font can't render the text, try fallback
         try {
           // Strip non-ASCII for fallback rendering
@@ -114,7 +113,7 @@ export async function GET(
           const fallbackFont = options.font === fontBold ? helveticaBold : helveticaRegular
           page.drawText(asciiOnly, { ...options, font: fallbackFont })
         } catch (e2) {
-          console.warn('Could not render text at all:', e2)
+          // Silently fail to keep things fast
         }
       }
     }
