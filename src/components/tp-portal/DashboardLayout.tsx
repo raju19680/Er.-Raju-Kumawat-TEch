@@ -70,7 +70,7 @@ function PageContent() {
 // ─── Main Layout ──────────────────────────────────────────────────────────────
 export function DashboardLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       {/* Sidebar */}
       <DashboardSidebar />
 

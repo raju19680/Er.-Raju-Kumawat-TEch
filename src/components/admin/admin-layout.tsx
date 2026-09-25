@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React from 'react'
 import { useAppStore } from '@/lib/store'
@@ -249,7 +249,7 @@ function PageContent() {
 
 export default function AdminLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       {/* Sidebar — manages its own width via hover */}
       <React.Suspense
         fallback={

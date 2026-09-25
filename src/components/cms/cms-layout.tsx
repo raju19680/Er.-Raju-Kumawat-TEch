@@ -509,7 +509,7 @@ export default function CMSLayout() {
   }, [moduleAccess, moduleAccessLoaded, currentPage, setCurrentPage, userRole])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       {/* Sidebar */}
       <React.Suspense
         fallback={
