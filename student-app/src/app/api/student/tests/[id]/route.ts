@@ -63,6 +63,7 @@ export async function GET(
         testMode: true,
         allowPdfDownload: true,
         pdfPasswordProtected: true,
+        uiType: true,
 
 
         questions: {
@@ -189,6 +190,7 @@ export async function GET(
         testMode: test.testMode,
         allowPdfDownload: test.allowPdfDownload,
         pdfPasswordProtected: test.pdfPasswordProtected,
+        uiType: test.uiType,
 
 
         completedAttempts: completedAttemptsCount,

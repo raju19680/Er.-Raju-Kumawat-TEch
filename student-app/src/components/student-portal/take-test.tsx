@@ -73,6 +73,7 @@ interface TestData {
   title: string
   instructions: string | null
     isRssbTheme?: boolean
+    uiType?: string
     strictTenPercentRule?: boolean
     autoGeneratePdf?: boolean
   totalDuration: number
@@ -838,7 +839,8 @@ export default function TakeTest() {
                     {optionsList.map((num) => {
                       const text = (question as any)[`option${num}`]
                       const img = (question as any)[`option${num}Image`]
-                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
+                      const isRssbOption5 = test.uiType === 'rssb' && num === '5'
+                        if (!text && !img && !(test.isPdfTest && num !== '5') && !isRssbOption5) return null
                       return (
                         <div
                           key={num}
@@ -850,7 +852,8 @@ export default function TakeTest() {
                         >
                           <RadioGroupItem value={num} id={`q${question.id}-${num}`} className="mt-1" disabled={isOmr} />
                           <Label htmlFor={`q${question.id}-${num}`} className={`flex-1 text-base text-gray-800 leading-relaxed font-normal ${isOmr ? 'cursor-default' : 'cursor-pointer'}`}>
-                            {test.isPdfTest && !text && !img && <span className="font-semibold text-gray-500">Option {['A','B','C','D','E'][parseInt(num)-1]}</span>}
+                            {test.isPdfTest && !text && !img && !isRssbOption5 && <span className="font-semibold text-gray-500">Option {['A','B','C','D','E'][parseInt(num)-1]}</span>}
+                              {isRssbOption5 && !text && !img && <span className="font-semibold text-gray-600">Not Attempted (????????? ??????)</span>}
                             {text && <div dangerouslySetInnerHTML={{ __html: text.replace(/\n/g, '<br/>') }} />}
                             {img && <img src={img} alt={`Option ${num}`} className="mt-2 max-w-full h-auto rounded border" />}
                           </Label>
@@ -863,7 +866,8 @@ export default function TakeTest() {
                     {optionsList.map((num) => {
                       const text = (question as any)[`option${num}`]
                       const img = (question as any)[`option${num}Image`]
-                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
+                      const isRssbOption5 = test.uiType === 'rssb' && num === '5'
+                        if (!text && !img && !(test.isPdfTest && num !== '5') && !isRssbOption5) return null
                       const selected = (answers[question.id] || '').split(',').includes(num)
                       return (
                         <div
