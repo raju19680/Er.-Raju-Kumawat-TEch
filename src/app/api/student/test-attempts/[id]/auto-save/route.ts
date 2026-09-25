@@ -2,7 +2,7 @@
 import { db } from '@/lib/db'
 import { verifyAuth } from '@/lib/auth'
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await verifyAuth()
     const student = user ? await db.student.findUnique({ where: { phone: user.phone } }) : null
@@ -12,7 +12,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await req.json()
 
     // Validate attempt exists and belongs to student

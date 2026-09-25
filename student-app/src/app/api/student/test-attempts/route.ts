@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth-helpers'
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         const newStudent = await db.student.create({
           data: {
             userId: auth.id,
-            fullName: 'Admin Preview',
+            name: 'Admin Preview',
             phone: '0000000000'
           }
         });
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         const newStudent = await db.student.create({
           data: {
             userId: auth.id,
-            fullName: 'Admin Preview',
+            name: 'Admin Preview',
             phone: '0000000000'
           }
         });

@@ -1,25 +1,23 @@
-﻿import { NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { verifyAuth } from '@/lib/auth'
+import { getAuthStudent } from '@/lib/auth-helpers'
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await verifyAuth()
-    const student = user ? await db.student.findUnique({ where: { phone: user.phone } }) : null
-    const studentId = student?.id || null
+    const { student, error, status } = await getAuthStudent(req)
 
-    if (!studentId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    if (error || !student) {
+      return NextResponse.json({ success: false, error: error || 'Unauthorized' }, { status: status || 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await req.json()
 
     // Validate attempt exists and belongs to student
     const attempt = await db.testAttempt.findFirst({
       where: {
         id,
-        studentId,
+        studentId: student.id,
         status: 'in_progress',
       },
     })

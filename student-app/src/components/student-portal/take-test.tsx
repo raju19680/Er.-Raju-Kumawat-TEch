@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
@@ -79,6 +79,11 @@ interface TestData {
   numberOfQuestions: number
   totalMarks: number
   testMode?: string
+  optionCount?: number
+  unattemptedPenalty?: number
+  displayPause?: boolean
+  isPdfTest?: boolean
+  pdfUrl?: string
   isLive: boolean
   maxAttempts: number
   negativeMarks: number
@@ -180,8 +185,8 @@ export default function TakeTest() {
     if (!attemptId || !test || submitting) return
     const interval = setInterval(async () => {
       try {
-        const isUnlimited = test.totalDuration === 0
-        const timeTaken = isUnlimited ? timeLeft : (test.totalDuration * 60) - timeLeft
+        const isUnlimited = test?.totalDuration === 0
+        const timeTaken = isUnlimited ? timeLeft : ((test?.totalDuration || 0) * 60) - timeLeft
         await apiFetchJSON(`/api/student/test-attempts/${attemptId}/auto-save`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -307,7 +312,7 @@ export default function TakeTest() {
       }
 
       const isUnlimited = test ? test.totalDuration === 0 : false
-      const timeTaken = isUnlimited ? timeLeft : (test ? (test.totalDuration * 60) - timeLeft : 0)
+      const timeTaken = isUnlimited ? timeLeft : (test ? ((test?.totalDuration || 0) * 60) - timeLeft : 0)
       let currentAttemptId = attemptId
 
       if (!currentAttemptId && test) {
@@ -376,7 +381,7 @@ export default function TakeTest() {
 
     try {
       const isUnlimited = test ? test.totalDuration === 0 : false
-      const timeTaken = isUnlimited ? timeLeft : (test ? (test.totalDuration * 60) - timeLeft : 0)
+      const timeTaken = isUnlimited ? timeLeft : (test ? ((test?.totalDuration || 0) * 60) - timeLeft : 0)
       let currentAttemptId = attemptId
 
       // If no attempt exists yet, create one first
@@ -435,7 +440,7 @@ export default function TakeTest() {
 
   // Derived values for question rendering
   const optionCount = test?.isRssbTheme ? 5 : (test?.optionCount || 4)
-  const optionsList = Array.from({ length: optionCount }, (_, i) => i + 1)
+  const optionsList = Array.from({ length: optionCount }, (_, i) => (i + 1).toString())
   const unattemptedPenalty = test?.strictTenPercentRule ? 100 : (test?.unattemptedPenalty || 0)
 
   const selectAnswer = (questionId: string, option: string) => {
