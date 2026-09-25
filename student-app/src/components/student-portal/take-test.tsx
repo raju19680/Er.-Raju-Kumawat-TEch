@@ -903,39 +903,22 @@ export default function TakeTest() {
           </div>
 
           {/* Action Bar */}
-          <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                className="bg-white hover:bg-gray-100 font-semibold text-gray-700"
-                onClick={() => handleReviewAndNext(question.id)}
-              >
-                Mark for Review & Next
-              </Button>
-              <Button
-                variant="outline"
-                className="bg-white hover:bg-gray-100 font-semibold text-gray-700"
-                onClick={() => clearAnswer(question.id)}
-                disabled={!answers[question.id]}
-              >
-                Clear Response
-              </Button>
-            </div>
-            
-            <div className="flex items-center gap-3">
+          <div className="border-t border-gray-200 bg-gray-50 px-2 sm:px-6 py-3 sm:py-4 flex flex-col xl:flex-row items-center justify-between gap-3 sm:gap-4 shrink-0">
+            {/* Nav Buttons (Next/Prev) go on top in mobile */}
+            <div className="flex w-full xl:w-auto items-center justify-between gap-2 sm:gap-3 order-1 xl:order-2">
               <Button
                 variant="outline"
                 onClick={() => {
                   if (currentQ > 0) goToQuestion(currentQ - 1, questions[currentQ - 1].id)
                 }}
                 disabled={currentQ === 0}
-                className="bg-white font-semibold text-gray-700"
+                className="bg-white font-semibold text-gray-700 flex-1 xl:flex-none h-10 sm:h-10 text-xs sm:text-sm px-2 sm:px-4"
               >
-                <ChevronLeft className="size-4 mr-1" />
-                Previous
+                <ChevronLeft className="size-4 sm:mr-1" />
+                <span className="inline sm:hidden">Prev</span><span className="hidden sm:inline">Previous</span>
               </Button>
               <Button
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6"
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-2 sm:px-6 flex-1 xl:flex-none h-10 sm:h-10 text-xs sm:text-sm"
                 onClick={() => {
                   if (markedForReview.has(question.id)) {
                     setMarkedForReview(prev => {
@@ -948,8 +931,27 @@ export default function TakeTest() {
                 }}
                 disabled={currentQ === questions.length - 1}
               >
-                Save & Next
-                <ChevronRight className="size-4 ml-1" />
+                <span className="inline sm:hidden">Next</span><span className="hidden sm:inline">Save & Next</span>
+                <ChevronRight className="size-4 sm:ml-1" />
+              </Button>
+            </div>
+            
+            {/* Clear/Review Buttons go on bottom in mobile */}
+            <div className="flex w-full xl:w-auto items-center justify-between xl:justify-start gap-2 sm:gap-3 order-2 xl:order-1">
+              <Button
+                variant="outline"
+                className="bg-white hover:bg-gray-100 font-semibold text-gray-700 text-xs sm:text-sm px-2 sm:px-4 flex-1 xl:flex-none h-10 sm:h-10 whitespace-nowrap"
+                onClick={() => handleReviewAndNext(question.id)}
+              >
+                <span className="hidden sm:inline">Mark for </span>Review <span className="hidden sm:inline">& Next</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="bg-white hover:bg-gray-100 font-semibold text-gray-700 text-xs sm:text-sm px-2 sm:px-4 flex-1 xl:flex-none h-10 sm:h-10 whitespace-nowrap"
+                onClick={() => clearAnswer(question.id)}
+                disabled={!answers[question.id]}
+              >
+                Clear<span className="hidden sm:inline"> Response</span>
               </Button>
             </div>
           </div>
