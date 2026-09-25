@@ -41,9 +41,8 @@ export async function POST(
       return NextResponse.json({ error: 'No active attempt found' }, { status: 400 })
     }
 
-    const isOmr = test.testMode === 'OMR' || !!omrImageUrl
-
-    if (isOmr) {
+    // If the student uploaded a physical OMR sheet photo
+    if (omrImageUrl) {
       attempt = await db.testAttempt.update({
         where: { id: attempt.id },
         data: {
@@ -52,8 +51,8 @@ export async function POST(
           score: 0,
           totalMarks: test.totalMarks || 0,
           timeTaken: timeTaken || attempt.timeTaken,
-          answers: JSON.stringify(answers || {}),
-          omrImageUrl: omrImageUrl || null,
+          answers: JSON.stringify({ omrImageUrl, ...answers }),
+          omrImageUrl: omrImageUrl,
         }
       })
 

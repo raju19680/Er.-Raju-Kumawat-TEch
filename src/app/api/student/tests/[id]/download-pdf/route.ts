@@ -103,7 +103,7 @@ export async function GET(
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': req.nextUrl.searchParams.get('inline') === 'true' ? `inline; filename="\$\{filename\}"` : `attachment; filename="\$\{filename\}"`,
         'X-Password-Protected': test.pdfPasswordProtected ? 'true' : 'false',
         'Cache-Control': 'no-store',
       },
@@ -202,3 +202,4 @@ async function createTestPdfDocument(test: any, studentName: string, studentPhon
 
   return pdfDoc
 }
+

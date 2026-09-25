@@ -34,6 +34,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, message: error || 'Authentication required' }, { status: status || 401 })
     }
 
+    if (student.id === 'admin-bypass') { return NextResponse.json({ success: false, message: 'Profile updates are disabled when previewing as Admin' }, { status: 403 }) }
+
     const body = await req.json()
     const { name, phone, avatar, currentPassword, newPassword } = body
 
@@ -111,3 +113,4 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Failed to update profile' }, { status: 500 })
   }
 }
+

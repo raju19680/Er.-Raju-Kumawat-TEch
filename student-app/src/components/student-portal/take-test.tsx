@@ -6,27 +6,27 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  Flag,
   Loader2,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   BookmarkCheck,
   ClipboardList,
   AlertCircle,
   RotateCcw,
+  Maximize2,
+  Minimize2,
+  Menu,
   Upload,
   Camera,
   FileText,
-  BookOpen,
+  CheckCircle2,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { apiFetchJSON } from '@/lib/api-client'
 import { Card, CardContent } from '@/components/ui/card'
-import { MediaImage } from '@/components/ui/media-image'
 import { Button } from '@/components/ui/button'
+import { TakeTestOMRView } from './take-test-omr-view'
 import { Badge } from '@/components/ui/badge'
-import { SecurePdfViewer } from '@/components/shared/secure-pdf-viewer'
 import {
   Dialog,
   DialogContent,
@@ -39,8 +39,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
+import Image from 'next/image'
 
 interface Question {
   id: string
@@ -72,6 +72,9 @@ interface TestData {
   id: string
   title: string
   instructions: string | null
+    isRssbTheme?: boolean
+    strictTenPercentRule?: boolean
+    autoGeneratePdf?: boolean
   totalDuration: number
   numberOfQuestions: number
   totalMarks: number
@@ -83,61 +86,39 @@ interface TestData {
   hasInProgress: boolean
   inProgressAttemptId: string | null
   questions: Question[]
-  isPdfTest?: boolean
-  pdfUrl?: string | null
-  allowPdfDownload?: boolean
-  pdfPasswordProtected?: boolean
-  themeSnapshot?: string | null
-  theme?: any
-  
-  
 }
 
 export default function TakeTest() {
-  const { selectedTestId, isPracticeMode, setStudentPage, setSelectedAttemptId, takeTestMode } = useAppStore()
+  const { selectedTestId, setStudentPage, goBackStudentPage, setSelectedAttemptId, takeTestMode } = useAppStore()
   const [test, setTest] = useState<TestData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
   const [currentQ, setCurrentQ] = useState(0)
-  const [activeSection, setActiveSection] = useState<string | null>(null)
-  const currentQRef = useRef(currentQ)
-  currentQRef.current = currentQ
-
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set())
+  const [visitedQuestions, setVisitedQuestions] = useState<Set<string>>(new Set([Object.keys({})[0] || '0'])) // initialize in effect
+  
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [showInstructions, setShowInstructions] = useState(true)
   const [attemptId, setAttemptId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  
-  const answersRef = useRef(answers)
-  answersRef.current = answers
-
-  const [timePerQuestion, setTimePerQuestion] = useState<Record<string, number>>({})
-  const timePerQuestionRef = useRef(timePerQuestion)
-  timePerQuestionRef.current = timePerQuestion
-
-  const markedForReviewRef = useRef(markedForReview)
-  markedForReviewRef.current = markedForReview
-
-  const [bookmarked, setBookmarked] = useState<Record<string, boolean>>({})
-
-  // Report state
-  const [reportModalOpen, setReportModalOpen] = useState(false)
-  const [reportingQuestionId, setReportingQuestionId] = useState<string | null>(null)
-  const [reportReason, setReportReason] = useState('')
-  const [submittingReport, setSubmittingReport] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const isPausedRef = useRef(isPaused)
+  useEffect(() => { isPausedRef.current = isPaused }, [isPaused])
 
   // OMR Hybrid state
   const [omrModalOpen, setOmrModalOpen] = useState(false)
   const [omrFile, setOmrFile] = useState<File | null>(null)
   const [omrPreview, setOmrPreview] = useState<string | null>(null)
   const [uploadingOmr, setUploadingOmr] = useState(false)
-
-  const isOmr = (test as any)?.testMode === 'OMR' || (test as any)?.isOmr || false
+  
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const answersRef = useRef(answers)
+  answersRef.current = answers
 
   const load = async () => {
     if (!selectedTestId) return
@@ -152,6 +133,34 @@ export default function TakeTest() {
         setTimeLeft((res.test.totalDuration || 0) * 60)
         if (res.test.hasInProgress && res.test.inProgressAttemptId) {
           setAttemptId(res.test.inProgressAttemptId)
+          // Attempt to fetch saved answers from attempt
+          const attemptRes = await apiFetchJSON<{ success: boolean; attempts: any[] }>(
+            `/api/student/test-attempts?testId=${selectedTestId}`
+          )
+          if (attemptRes.success && attemptRes.attempts?.length > 0) {
+            const inProgress = attemptRes.attempts.find((a: any) => a.status === 'in_progress')
+            if (inProgress?.answers) {
+              try {
+                const parsed = JSON.parse(inProgress.answers)
+                if (parsed.answers) setAnswers(parsed.answers)
+                if (parsed.markedForReview) setMarkedForReview(new Set(parsed.markedForReview))
+              } catch (e) {
+                // Legacy support if answers was just an object
+                try {
+                  const parsed = JSON.parse(inProgress.answers)
+                  if (!parsed.markedForReview) setAnswers(parsed)
+                } catch (e2) {}
+              }
+              if (inProgress.timeTaken) {
+                const elapsed = inProgress.timeTaken
+                const totalSecs = (res.test.totalDuration || 0) * 60
+                setTimeLeft(Math.max(0, totalSecs - elapsed))
+              }
+            }
+          }
+        }
+        if (res.test.questions?.length > 0) {
+          setVisitedQuestions(new Set([res.test.questions[0].id]))
         }
       }
     } catch (err) {
@@ -166,8 +175,50 @@ export default function TakeTest() {
     load()
   }, [selectedTestId])
 
+  // Auto-save logic
+  useEffect(() => {
+    if (!attemptId || !test || submitting) return
+    const interval = setInterval(async () => {
+      try {
+        const isUnlimited = test.totalDuration === 0
+        const timeTaken = isUnlimited ? timeLeft : (test.totalDuration * 60) - timeLeft
+        await apiFetchJSON(`/api/student/test-attempts/${attemptId}/auto-save`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers: answersRef.current,
+            timeTaken,
+            markedForReview: Array.from(markedForReview),
+          })
+        })
+      } catch (err) {
+        console.error('Auto-save failed:', err)
+      }
+    }, 30000) // Auto-save every 30 seconds
+    return () => clearInterval(interval)
+  }, [attemptId, test, timeLeft, submitting, markedForReview])
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        toast.error('Fullscreen mode is not supported by your browser.')
+      })
+      setIsFullscreen(true)
+    } else {
+      document.exitFullscreen()
+      setIsFullscreen(false)
+    }
+  }
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
   // Start attempt and timer
-  const [isStarting, setIsStarting] = useState(false)
   const handleStartTest = useCallback(async () => {
     if (!test) return
     try {
@@ -177,7 +228,7 @@ export default function TakeTest() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ testId: test.id, isPractice: isPracticeMode }),
+            body: JSON.stringify({ testId: test.id }),
           }
         )
         if (res.success) {
@@ -191,44 +242,24 @@ export default function TakeTest() {
       // Start timer
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current)
-            // Auto-submit
-            handleSubmit(true)
-            return 0
+          if (test.totalDuration === 0) {
+            // Count UP for unlimited time
+            return prev + 1
+          } else {
+            // Count DOWN for limited time
+            if (prev <= 1) {
+              if (timerRef.current) clearInterval(timerRef.current)
+              // Auto-submit
+              handleSubmit(true)
+              return 0
+            }
+            return prev - 1
           }
-          
-          // Auto-save every 30 seconds
-          if (prev % 30 === 0 && attemptId) {
-             apiFetchJSON(`/api/student/test-attempts/${attemptId}/auto-save`, {
-               method: 'PUT',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                 answers: answersRef.current,
-                 markedForReview: Array.from(markedForReviewRef.current),
-                 timePerQuestion: timePerQuestionRef.current,
-                 timeTaken: (test.totalDuration || 0) * 60 - prev
-               })
-             }).catch(console.error)
-          }
-          
-          return prev - 1
         })
-
-        // Track time per question
-        if (test && test.questions && test.questions.length > 0) {
-           const currentQuestionId = test.questions[currentQRef.current]?.id
-           if (currentQuestionId) {
-             setTimePerQuestion(prev => ({
-               ...prev,
-               [currentQuestionId]: (prev[currentQuestionId] || 0) + 1
-             }))
-           }
-        }
       }, 1000)
     } catch (err) {
       console.error('Start attempt error:', err)
-      toast.error(err instanceof Error ? err.message : 'Failed to start test. Please try again.')
+      toast.error('Failed to start test. Please try again.')
     }
   }, [test, attemptId])
 
@@ -254,6 +285,7 @@ export default function TakeTest() {
     try {
       let omrImageUrl = omrPreview
 
+      // Try uploading to /api/upload-image if file exists
       if (omrFile) {
         try {
           const formData = new FormData()
@@ -270,11 +302,12 @@ export default function TakeTest() {
             }
           }
         } catch (uploadErr) {
-          console.warn('Upload image failed, using base64 data URL:', uploadErr)
+          console.warn('Upload image API failed, using base64 preview:', uploadErr)
         }
       }
 
-      const timeTaken = test ? (test.totalDuration * 60) - timeLeft : 0
+      const isUnlimited = test ? test.totalDuration === 0 : false
+      const timeTaken = isUnlimited ? timeLeft : (test ? (test.totalDuration * 60) - timeLeft : 0)
       let currentAttemptId = attemptId
 
       if (!currentAttemptId && test) {
@@ -283,7 +316,7 @@ export default function TakeTest() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ testId: test.id, isPractice: isPracticeMode }),
+            body: JSON.stringify({ testId: test.id }),
           }
         )
         if (createRes.success && createRes.attempt?.id) {
@@ -295,7 +328,7 @@ export default function TakeTest() {
         }
       }
 
-      // Submit the attempt with omrImageUrl
+      // Submit attempt with omrImageUrl
       const res = await apiFetchJSON<{ success: boolean; attempt: { id: string } }>(
         `/api/student/test-attempts/${currentAttemptId}`,
         {
@@ -303,8 +336,6 @@ export default function TakeTest() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             answers: answersRef.current,
-            markedForReview: Array.from(markedForReviewRef.current),
-            timePerQuestion: timePerQuestionRef.current,
             timeTaken,
             omrImageUrl,
           }),
@@ -312,6 +343,7 @@ export default function TakeTest() {
       )
 
       if (res.success) {
+        if (document.fullscreenElement) document.exitFullscreen()
         setSelectedAttemptId(res.attempt?.id || currentAttemptId || '')
         setOmrModalOpen(false)
         setStudentPage('test-result')
@@ -343,7 +375,8 @@ export default function TakeTest() {
     if (timerRef.current) clearInterval(timerRef.current)
 
     try {
-      const timeTaken = test ? (test.totalDuration * 60) - timeLeft : 0
+      const isUnlimited = test ? test.totalDuration === 0 : false
+      const timeTaken = isUnlimited ? timeLeft : (test ? (test.totalDuration * 60) - timeLeft : 0)
       let currentAttemptId = attemptId
 
       // If no attempt exists yet, create one first
@@ -353,7 +386,7 @@ export default function TakeTest() {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ testId: test.id, isPractice: isPracticeMode }),
+            body: JSON.stringify({ testId: test.id }),
           }
         )
         if (createRes.success && createRes.attempt?.id) {
@@ -373,13 +406,12 @@ export default function TakeTest() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             answers: answersRef.current,
-            markedForReview: Array.from(markedForReviewRef.current),
-            timePerQuestion: timePerQuestionRef.current,
             timeTaken,
           }),
         }
       )
       if (res.success) {
+        if (document.fullscreenElement) document.exitFullscreen()
         setSelectedAttemptId(res.attempt?.id || currentAttemptId || '')
         setStudentPage('test-result')
       } else {
@@ -401,6 +433,11 @@ export default function TakeTest() {
     }
   }, [])
 
+  // Derived values for question rendering
+  const optionCount = test?.isRssbTheme ? 5 : (test?.optionCount || 4)
+  const optionsList = Array.from({ length: optionCount }, (_, i) => i + 1)
+  const unattemptedPenalty = test?.strictTenPercentRule ? 100 : (test?.unattemptedPenalty || 0)
+
   const selectAnswer = (questionId: string, option: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: option }))
   }
@@ -416,59 +453,41 @@ export default function TakeTest() {
     })
   }
 
-  const toggleReview = (questionId: string) => {
-    setMarkedForReview((prev) => {
+  const handleNext = () => {
+    if (!test || currentQ >= test.questions.length - 1) return
+    const nextQ = currentQ + 1
+    setCurrentQ(nextQ)
+    setVisitedQuestions(prev => {
       const next = new Set(prev)
-      if (next.has(questionId)) next.delete(questionId)
-      else next.add(questionId)
+      next.add(test.questions[nextQ].id)
       return next
     })
   }
 
-  const handleReportSubmit = async () => {
-    if (!reportingQuestionId || !reportReason.trim()) return
-    setSubmittingReport(true)
-    try {
-      const res = await apiFetchJSON<{ success: boolean; message?: string }>(
-        `/api/student/questions/${reportingQuestionId}/report`,
-        { 
-          method: 'POST',
-          body: JSON.stringify({ reason: reportReason })
-        }
-      )
-      if (res.success) {
-        toast.success(res.message || 'Question reported successfully')
-        setReportModalOpen(false)
-        setReportReason('')
-        setReportingQuestionId(null)
-      } else {
-        toast.error(res.message || 'Failed to report question')
-      }
-    } catch (err) {
-      toast.error('Network error. Could not report question.')
-    } finally {
-      setSubmittingReport(false)
-    }
+  const handleReviewAndNext = (questionId: string) => {
+    setMarkedForReview(prev => {
+      const next = new Set(prev)
+      next.add(questionId)
+      return next
+    })
+    handleNext()
   }
 
-  const handleBookmark = async (questionId: string) => {
-    const prev = bookmarked[questionId]
-    setBookmarked(p => ({ ...p, [questionId]: !prev })) // optimistic
-    try {
-      const res = await apiFetchJSON<{ success: boolean; bookmarked: boolean }>(
-        `/api/student/questions/${questionId}/bookmark`,
-        { method: 'POST' }
-      )
-      if (res.success) {
-        setBookmarked(p => ({ ...p, [questionId]: res.bookmarked }))
-      } else {
-        setBookmarked(p => ({ ...p, [questionId]: prev })) // revert
-        toast.error('Failed to bookmark question')
-      }
-    } catch (err) {
-      setBookmarked(p => ({ ...p, [questionId]: prev })) // revert
-      toast.error('Network error')
-    }
+  const clearAnswer = (questionId: string) => {
+    setAnswers((prev) => {
+      const next = { ...prev }
+      delete next[questionId]
+      return next
+    })
+  }
+
+  const goToQuestion = (idx: number, qId: string) => {
+    setCurrentQ(idx)
+    setVisitedQuestions(prev => {
+      const next = new Set(prev)
+      next.add(qId)
+      return next
+    })
   }
 
   const formatTime = (seconds: number) => {
@@ -479,82 +498,11 @@ export default function TakeTest() {
     return `${m}:${String(s).padStart(2, '0')}`
   }
 
-  // Safe parse JSON
-  const safeJsonParse = (val: any, fallback: any) => {
-    if (!val) return fallback
-    if (typeof val === 'object') return val
-    try { return JSON.parse(val) } catch { return fallback }
-  }
-
-  // Parse Theme
-  let themeConfig: any = null
-  if (test) {
-    let tData = test.themeSnapshot ? safeJsonParse(test.themeSnapshot, null) : test.theme
-    if (tData) {
-      themeConfig = {
-        typography: safeJsonParse(tData.typography, {}),
-        colorTokens: safeJsonParse(tData.colorTokens, {}),
-        questionStyle: safeJsonParse(tData.questionStyle, {}),
-        optionStyle: safeJsonParse(tData.optionStyle, {}),
-        cbtSettings: safeJsonParse(tData.cbtSettings, {}),
-        pdfSettings: safeJsonParse(tData.pdfSettings, {}),
-        brandingConfig: safeJsonParse(tData.brandingConfig, {}),
-        accessibility: safeJsonParse(tData.accessibility, {}),
-      }
-    }
-  }
-
-const questions = test?.questions || []
-  const isPdfMode = takeTestMode === 'PDF' && test?.pdfUrl
-
-
-  // Sections Logic
-  const sections = React.useMemo(() => {
-    const s = new Set<string>()
-    questions.forEach(q => {
-      if (q.section) s.add(q.section)
-    })
-    return Array.from(s)
-  }, [questions])
-
-  React.useEffect(() => {
-    if (sections.length > 0 && !activeSection) {
-      setActiveSection(sections[0])
-    }
-  }, [sections, activeSection])
-
-  React.useEffect(() => {
-    if (questions[currentQ]?.section && questions[currentQ]?.section !== activeSection) {
-      setActiveSection(questions[currentQ].section)
-    }
-  }, [currentQ, questions, activeSection])
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).renderMathInElement) {
-      setTimeout(() => {
-        (window as any).renderMathInElement(document.body, {
-          delimiters: [
-            {left: '$$', right: '$$', display: true},
-            {left: '$', right: '$', display: false},
-            {left: '\\(', right: '\\)', display: false},
-            {left: '\\[', right: '\\]', display: true}
-          ],
-        })
-      }, 100) // Small delay to let DOM render
-    }
-  }, [currentQ, activeSection])
-
-  const displayedQuestions = React.useMemo(() => {
-    if (!activeSection) return questions.map((q, idx) => ({ q, idx }))
-    return questions.map((q, idx) => ({ q, idx })).filter(item => item.q.section === activeSection)
-  }, [questions, activeSection])
-
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="size-8 animate-spin text-amber-600 mx-auto mb-4" />
+          <Loader2 className="size-8 animate-spin text-indigo-600 mx-auto mb-4" />
           <p className="text-sm text-gray-500">Loading test...</p>
         </div>
       </div>
@@ -584,7 +532,7 @@ const questions = test?.questions || []
         <div className="text-center">
           <AlertCircle className="size-12 mx-auto mb-3 opacity-40" />
           <p className="text-base font-medium">Test not found</p>
-          <Button variant="outline" className="mt-3" onClick={() => setStudentPage('my-tests')}>
+          <Button variant="outline" className="mt-3" onClick={() => goBackStudentPage()}>
             Go Back
           </Button>
         </div>
@@ -610,11 +558,11 @@ const questions = test?.questions || []
             <CardContent className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="size-4 text-amber-600" />
-                  Duration: {test.totalDuration} min
+                  <Clock className="size-4 text-indigo-600" />
+                    Duration: {test.totalDuration === 0 ? 'Unlimited' : `${test.totalDuration} min`}
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
-                  <ClipboardList className="size-4 text-amber-600" />
+                  <ClipboardList className="size-4 text-indigo-600" />
                   Questions: {test.numberOfQuestions}
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
@@ -626,6 +574,36 @@ const questions = test?.questions || []
                   </div>
                 )}
               </div>
+              
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Color Legend:</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-gray-100 text-gray-600 border border-gray-200">1</div>
+                    <span>Not Visited</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-red-500 text-white shadow-sm border-b-2 border-red-700">2</div>
+                    <span>Not Answered</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-green-500 text-white shadow-sm border-b-2 border-green-700">3</div>
+                    <span>Answered</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-purple-500 text-white shadow-sm border-b-2 border-purple-700">4</div>
+                    <span>Marked for Review</span>
+                  </div>
+                  <div className="flex items-center gap-2 col-span-2">
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-purple-500 text-white shadow-sm border-b-2 border-purple-700 relative">
+                      5
+                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white"></div>
+                    </div>
+                    <span>Answered & Marked for Review (Will be considered for evaluation)</span>
+                  </div>
+                </div>
+              </div>
+
               {attemptId && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 text-amber-700 text-sm">
                   <AlertTriangle className="size-4 shrink-0" />
@@ -644,14 +622,13 @@ const questions = test?.questions || []
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => setStudentPage('my-tests')}
+              onClick={() => goBackStudentPage()}
             >
               Go Back
             </Button>
             <Button
-              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-base sm:text-lg py-4 sm:py-6"
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-base sm:text-lg py-4 sm:py-6"
               onClick={handleStartTest}
-                disabled={isStarting}
             >
               {attemptId ? 'Resume Test' : 'Start Test'}
             </Button>
@@ -661,541 +638,479 @@ const questions = test?.questions || []
     )
   }
 
+  const questions = test.questions || []
   
-  
-  if (questions.length === 0 && !isPdfMode) {
+  if (questions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
-        <AlertTriangle className="size-16 text-amber-500 mb-4 opacity-50 mx-auto" />
-        <h2 className="text-xl font-bold text-gray-900 mb-2">No Questions Available</h2>
-        <p className="text-gray-500 mb-6">This test does not have any questions yet.</p>
-        <Button onClick={() => setStudentPage('my-tests')}>Go Back to My Tests</Button>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 text-gray-500">
+        <div className="text-center">
+          <AlertCircle className="size-12 mx-auto mb-3 opacity-40 text-indigo-500" />
+          <p className="text-base font-medium text-gray-800">This test has no questions yet.</p>
+          <p className="text-sm mt-1 mb-4">Please check back later or contact your teacher.</p>
+          <Button variant="outline" onClick={() => goBackStudentPage()}>
+            Go Back
+          </Button>
+        </div>
       </div>
     )
   }
 
-  const handleSectionClick = (section: string) => {
-    setActiveSection(section)
-    const firstQIdx = questions.findIndex(q => q.section === section)
-    if (firstQIdx !== -1) {
-      setCurrentQ(firstQIdx)
-    }
-  }
+  const question = questions[currentQ]
+  const isOmr = false
+  const isUnlimited = test?.totalDuration === 0
+  const isWarning = !isUnlimited && timeLeft <= 300 && timeLeft > 60
+  const isDanger = !isUnlimited && timeLeft <= 60
 
-  const question = questions.length > 0 ? questions[currentQ] : null
-  const isWarning = timeLeft <= 300 && timeLeft > 60
-  const isDanger = timeLeft <= 60
+  // Calculate stats for palette
+  let answeredCnt = 0
+  let notAnsweredCnt = 0
+  let markedCnt = 0
+  let markedAndAnsweredCnt = 0
+  let notVisitedCnt = 0
 
-  const containerStyle = themeConfig ? {
-    backgroundColor: themeConfig.colorTokens?.background || '#f9fafb',
-    fontFamily: themeConfig.typography?.englishFont || 'inherit',
-  } : {}
+  questions.forEach(q => {
+    const isAns = !!answers[q.id]
+    const isMark = markedForReview.has(q.id)
+    const isVis = visitedQuestions.has(q.id)
+
+    if (isAns && isMark) markedAndAnsweredCnt++
+      else if (isAns) answeredCnt++
+      else if (isMark) markedCnt++
+      else if (!isVis) notVisitedCnt++
+      else notAnsweredCnt++
+  })
+
+  // Extract sections
+  const sections = Array.from(new Set(questions.map(q => q.section || 'General')))
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col" style={containerStyle}>
-      {/* Top Bar */}
-      <div 
-        className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3 shrink-0"
-        style={themeConfig ? { backgroundColor: themeConfig.colorTokens?.primary, color: '#fff', borderColor: 'transparent' } : {}}
-      >
-        <h2 className="text-sm font-semibold truncate flex-1 min-w-0" style={themeConfig ? { color: '#fff' } : {}}>{test.title}</h2>
-        <div className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3 py-1.5 rounded-lg text-sm font-bold shrink-0 ${
-          isDanger ? 'bg-red-50 text-red-600 animate-pulse' :
-          isWarning ? 'bg-amber-50 text-amber-600' :
-          'bg-gray-100 text-gray-700'
-        }`}>
-          <Clock className="size-4" />
-          {formatTime(timeLeft)}
-        </div>
-        {!isPdfMode && (
-          <Badge variant="secondary" className="text-xs shrink-0 hidden sm:inline-flex">
-            {Object.keys(answers).length}/{questions.length} answered
-          </Badge>
-        )}
-        <Button
-          variant="destructive"
-          size="sm"
-          className="shrink-0"
-          onClick={() => handleSubmit(false)}
-          disabled={submitting}
-        >
-          {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Submit'}
-        </Button>
-      </div>
-
-      {/* Sections Tab Bar */}
-      {sections.length > 0 && !isPdfMode && (
-        <div className="bg-white border-b border-gray-200 px-2 flex items-center overflow-x-auto shrink-0 hide-scrollbar" style={themeConfig ? { backgroundColor: themeConfig.colorTokens?.surface } : {}}>
-          {sections.map(section => (
-            <button
-              key={section}
-              onClick={() => handleSectionClick(section)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                activeSection === section 
-                  ? 'border-emerald-500 text-emerald-600' 
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-              style={themeConfig && activeSection === section ? { borderColor: themeConfig.colorTokens?.primary, color: themeConfig.colorTokens?.primary } : {}}
-            >
-              {section}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Question Navigation Sidebar - desktop */}
-        {sidebarOpen && questions.length > 0 && (
-          <div className="hidden md:block w-64 border-r border-gray-200 bg-white overflow-y-auto">
-            <div className="p-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Questions</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {displayedQuestions.map(({q, idx}) => {
-                  const isAnswered = !!answers[q.id]
-                  const isReview = markedForReview.has(q.id)
-                  const isCurrent = idx === currentQ
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => setCurrentQ(idx)}
-                      className={`w-full aspect-square rounded-lg text-xs font-medium flex items-center justify-center transition-all ${
-                        isCurrent ? 'ring-2 ring-amber-500' :
-                        isReview ? 'bg-violet-100 text-violet-700' :
-                        isAnswered ? 'bg-emerald-100 text-emerald-700' :
-                        'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  )
-                })}
+    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col font-sans">
+      {isPaused && (
+          <div className="absolute inset-0 z-[100] bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center">
+            <div className="bg-white border shadow-xl rounded-2xl p-8 max-w-md w-full text-center space-y-6">
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
               </div>
-              <div className="mt-4 space-y-1.5 text-xs text-gray-500">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300" /> Answered
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-violet-100 border border-violet-300" /> Marked for Review
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300" /> Not Answered
-                </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Test Paused</h2>
+                <p className="text-gray-500 mt-2">Your timer is stopped. You cannot view the questions while paused.</p>
               </div>
+              <button 
+                onClick={() => setIsPaused(false)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition-colors"
+              >
+                Resume Test
+              </button>
             </div>
           </div>
         )}
+        {/* Top Header */}
+      <div className="bg-indigo-700 text-white px-4 py-2 flex items-center justify-between shrink-0 shadow-md z-10">
+        <div className="flex items-center gap-3">
+          <button onClick={() => goBackStudentPage()} className="p-1 -ml-1 text-indigo-200 hover:text-white transition-colors rounded hover:bg-indigo-600/50" title="Go Back"><ChevronLeft className="size-6" /></button><h1 className="text-lg font-bold tracking-wide truncate max-w-md">{test.title}</h1>
+        </div>
+        
+        <div className="flex items-center gap-4">
+            {test.displayPause && (
+              <button onClick={() => setIsPaused(true)} className="text-indigo-200 hover:text-white transition-colors" title="Pause Test">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              </button>
+            )}
+            <button onClick={toggleFullscreen} className="text-indigo-200 hover:text-white transition-colors" title="Toggle Fullscreen">
+            {isFullscreen ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+          </button>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-bold shadow-inner ${
+            isDanger ? 'bg-red-600 text-white animate-pulse' :
+            isWarning ? 'bg-amber-500 text-white' :
+            'bg-indigo-800 text-indigo-50'
+          }`}>
+            <Clock className="size-4" />
+            <span className="font-mono text-lg">{formatTime(timeLeft)}</span>
+          </div>
+        </div>
+      </div>
 
-        {/* Main Question Area */}
-        <div className="flex-1 overflow-y-auto">
-          {isPdfMode && test.pdfUrl ? (
-            <div className="h-full flex flex-col md:flex-row gap-4 p-4">
-              <div className="flex-1 min-h-[600px] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <SecurePdfViewer 
-                  url={test.pdfUrl} 
-                  title={test.title}
-                  allowDownload={test.allowPdfDownload}
-                  isPasswordProtected={test.pdfPasswordProtected}
-                  testId={test.id}
-                />
-              </div>
-              {questions.length > 0 && (
-                <div className="w-full md:w-[360px] flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden shrink-0 shadow-sm max-h-[80vh] md:max-h-full">
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-b border-gray-200 p-4 font-bold text-center shrink-0 shadow-sm flex flex-col">
-                    <span className="text-lg tracking-wide">Digital OMR Sheet</span>
-                    <span className="text-xs font-medium text-blue-100 opacity-90">Fill bubbles according to PDF</span>
-                  </div>
-                  <ScrollArea className="flex-1 p-1">
-                    <div className="space-y-1.5 p-2 pb-10">
-                      {questions.map((q, idx) => {
-                        const qNum = idx + 1;
-                        const currentAns = answers[q.id] || '';
-                        return (
-                          <div key={q.id} className={`flex items-center justify-between p-3 rounded-xl transition-colors border ${currentAns ? 'bg-blue-50/50 border-blue-100' : 'bg-white border-transparent hover:border-gray-100'}`}>
-                            <span className="w-8 text-right font-bold text-gray-500">{qNum}.</span>
-                            <div className="flex gap-3 mx-2">
-                              {['1','2','3','4'].map(opt => {
-                                const letter = opt === '1' ? 'A' : opt === '2' ? 'B' : opt === '3' ? 'C' : 'D';
-                                const isSelected = currentAns === opt;
-                                return (
-                                  <button
-                                    key={opt}
-                                    onClick={() => selectAnswer(q.id, opt)}
-                                    className={`w-11 h-11 rounded-full border-2 flex items-center justify-center font-bold text-sm transition-all shadow-sm ${
-                                      isSelected 
-                                        ? 'bg-blue-600 border-blue-600 text-white scale-105' 
-                                        : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
-                                    }`}
-                                  >
-                                    {letter}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            <div className="w-10 text-center">
-                              {currentAns && (
-                                <button
-                                  onClick={() => setAnswers(prev => { const n = {...prev}; delete n[q.id]; return n; })}
-                                  className="text-xs uppercase font-bold text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"
-                                >
-                                  Clear
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </ScrollArea>
+      {/* OMR Active Banner */}
+      {isOmr && (
+        <div className="bg-amber-600 text-white px-6 py-3 flex items-center justify-between text-xs sm:text-sm font-medium shadow-inner shrink-0">
+          <div className="flex items-center gap-2">
+            <FileText className="size-4 shrink-0" />
+            <span>Hybrid OMR Mode: Read questions on screen and darken circles on your physical sheet.</span>
+          </div>
+          <Badge className="bg-white/20 text-white border-white/30 text-xs">OMR Sheet</Badge>
+        </div>
+      )}
+
+      {takeTestMode === 'PDF' ? (<TakeTestOMRView test={test} questions={questions} answers={answers} selectAnswer={selectAnswer} toggleMultipleAnswer={toggleMultipleAnswer} handleSubmit={handleSubmit} submitting={submitting} />) : (<div className="flex flex-1 overflow-hidden min-h-0">{/* Main Area */}
+        <div className="flex-1 flex flex-col bg-white overflow-hidden relative shadow-[0_0_15px_rgba(0,0,0,0.05)] z-0 min-h-0">
+          
+          {/* Sections Header */}
+          <div className="flex border-b border-gray-200 overflow-x-auto bg-gray-50">
+            {sections.map(sec => {
+              const secQuestions = questions.filter(q => (q.section || 'General') === sec)
+              const hasCurrent = secQuestions.some(q => q.id === question.id)
+              return (
+                <div
+                  key={sec}
+                  className={`px-4 py-2 text-sm font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                    hasCurrent ? 'border-b-2 border-indigo-600 text-indigo-700 bg-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  }`}
+                  onClick={() => {
+                    const firstQIdx = questions.findIndex(q => (q.section || 'General') === sec)
+                    if (firstQIdx !== -1) goToQuestion(firstQIdx, questions[firstQIdx].id)
+                  }}
+                >
+                  {sec}
                 </div>
+              )
+            })}
+          </div>
+
+          {/* Question Info Bar */}
+          <div className="flex items-center justify-between px-6 py-2 border-b border-gray-200 bg-white text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-700 text-lg">Question No. {currentQ + 1}</span>
+              {isOmr && (
+                <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 text-xs font-semibold">
+                  Bubble on OMR Sheet
+                </Badge>
               )}
             </div>
-          ) : question ? (
-            <div className={`mx-auto p-4 sm:p-6 space-y-6 ${((question as any).passage || (question as any).passageId) ? 'max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-start' : 'max-w-4xl'}`}>
-              
-              {/* Passage Block */}
-              {((question as any).passage) && (
-                <Card className="py-0 sticky top-4 max-h-[85vh] overflow-y-auto">
-                  <CardContent className="p-5 sm:p-6 space-y-4">
-                    <div className="flex items-center gap-2 border-b pb-3 mb-4">
-                      <BookOpen className="size-5 text-emerald-600" />
-                      <h3 className="font-semibold text-gray-800">Read the passage</h3>
+            <div className="flex items-center gap-4 text-gray-600">
+              <div className="flex items-center gap-1 font-medium">
+                Marks: 
+                <span className="text-green-600">+{question.positiveMarks}</span>
+                {question.negativeMarks > 0 && <span className="text-red-500">-{question.negativeMarks}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Question Content */}
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white min-h-0">
+            {false && (
+              <div className="w-full md:w-3/5 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-gray-200 relative min-h-0 overflow-auto">
+                <iframe src={test.autoGeneratePdf ? `/api/student/tests/${test.id}/download-pdf?inline=true#toolbar=0` : `${test.pdfUrl}#toolbar=0`} className="w-full h-full border-0" />
+              </div>
+            )}
+            
+            <div className="flex-1 max-w-4xl space-y-6 min-h-0 overflow-y-auto p-4 md:p-6">
+              {true && (
+                <>
+                  {question.heading && (
+                    <p className="text-sm font-semibold text-indigo-700 bg-indigo-50 p-2 rounded-md border border-indigo-100">{question.heading}</p>
+                  )}
+                  {question.directive && (
+                    <p className="text-sm font-medium text-gray-600 italic bg-gray-50 p-2 border-l-4 border-gray-300">{question.directive}</p>
+                  )}
+                  
+                  <div className="text-base text-gray-900 leading-relaxed space-y-4">
+                    <div dangerouslySetInnerHTML={{ __html: (question.title || '').replace(/\n/g, '<br/>') }} />
+                    
+                    {/* Images */}
+                    <div className="space-y-4">
+                      {question.image1 && <img src={question.image1} alt="Question Image 1" className="max-w-full h-auto rounded border" />}
+                      {question.image2 && <img src={question.image2} alt="Question Image 2" className="max-w-full h-auto rounded border" />}
+                      {question.image3 && <img src={question.image3} alt="Question Image 3" className="max-w-full h-auto rounded border" />}
                     </div>
-                    {((question as any).passage.text) && (
-                      <div className="text-sm text-gray-700 leading-relaxed space-y-3 prose max-w-none" dangerouslySetInnerHTML={{ __html: (question as any).passage.text }} />
-                    )}
-                    {((question as any).passage.textHi) && (
-                      <div className="text-sm text-amber-900 leading-relaxed space-y-3 prose max-w-none border-t border-amber-100 pt-4" dangerouslySetInnerHTML={{ __html: (question as any).passage.textHi }} />
-                    )}
-                    {((question as any).passage.image) && (
-                      <MediaImage src={(question as any).passage.image} alt="Passage" className="max-w-full rounded border mt-4" />
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </>
               )}
 
-              <div className="space-y-6">
-              {/* Question Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="font-semibold text-xs">
-                    Q {currentQ + 1} / {questions.length}
-                  </Badge>
-                  {isOmr && (
-                    <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200 text-xs">
-                      Bubble on OMR Sheet
-                    </Badge>
-                  )}
-                  {question.section && (
-                    <Badge variant="secondary" className="text-xs">{question.section}</Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 mr-2">
-                    +{question.positiveMarks} {question.negativeMarks > 0 ? `/ -${question.negativeMarks}` : ''}
-                  </span>
-                  <Button
-                    variant={bookmarked[question.id] ? 'default' : 'outline'}
-                    size="sm"
-                    className={bookmarked[question.id] ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
-                    onClick={() => handleBookmark(question.id)}
-                    title="Bookmark for Revision"
+              {/* Options */}
+              <div className="mt-8 space-y-3">
+                {isOmr && (
+                  <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-800 font-medium flex items-center gap-2 mb-4">
+                    <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                    <span>Options are display-only in OMR mode. Please mark your answer bubble on your printed OMR sheet.</span>
+                  </div>
+                )}
+                {question.type === 'mcq' || question.type === 'assertion_reason' || question.type === 'true_false' ? (
+                  <RadioGroup
+                    value={answers[question.id] || ''}
+                    onValueChange={(val) => !isOmr && selectAnswer(question.id, val)}
+                    disabled={isOmr}
                   >
-                    <FileText className="size-3.5 mr-1" />
-                    {bookmarked[question.id] ? 'Saved' : 'Save'}
-                  </Button>
-                  <Button
-                    variant={markedForReview.has(question.id) ? 'default' : 'outline'}
-                    size="sm"
-                    className={markedForReview.has(question.id) ? 'bg-violet-600 hover:bg-violet-700 text-white' : ''}
-                    onClick={() => toggleReview(question.id)}
-                  >
-                    <BookmarkCheck className="size-3.5 mr-1" />
-                    {markedForReview.has(question.id) ? 'Marked' : 'Mark'}
-                  </Button>
-                </div>
+                    {optionsList.map((num) => {
+                      const text = (question as any)[`option${num}`]
+                      const img = (question as any)[`option${num}Image`]
+                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
+                      return (
+                        <div
+                          key={num}
+                          className={`flex items-start gap-3 p-3 rounded-lg border border-gray-200 transition-colors ${
+                            isOmr
+                              ? 'cursor-default bg-gray-50/40'
+                              : 'hover:border-indigo-300 hover:bg-indigo-50/30 cursor-pointer'
+                          }`}
+                        >
+                          <RadioGroupItem value={num} id={`q${question.id}-${num}`} className="mt-1" disabled={isOmr} />
+                          <Label htmlFor={`q${question.id}-${num}`} className={`flex-1 text-base text-gray-800 leading-relaxed font-normal ${isOmr ? 'cursor-default' : 'cursor-pointer'}`}>
+                            {test.isPdfTest && !text && !img && <span className="font-semibold text-gray-500">Option {['A','B','C','D','E'][parseInt(num)-1]}</span>}
+                            {text && <div dangerouslySetInnerHTML={{ __html: text.replace(/\n/g, '<br/>') }} />}
+                            {img && <img src={img} alt={`Option ${num}`} className="mt-2 max-w-full h-auto rounded border" />}
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </RadioGroup>
+                ) : question.type === 'multiple_correct' ? (
+                  <div className="space-y-3">
+                    {optionsList.map((num) => {
+                      const text = (question as any)[`option${num}`]
+                      const img = (question as any)[`option${num}Image`]
+                      if (!text && !img && !(test.isPdfTest && num !== '5')) return null
+                      const selected = (answers[question.id] || '').split(',').includes(num)
+                      return (
+                        <div
+                          key={num}
+                          className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                            isOmr
+                              ? 'cursor-default bg-gray-50/40 border-gray-200'
+                              : selected
+                              ? 'border-indigo-400 bg-indigo-50 cursor-pointer'
+                              : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/30 cursor-pointer'
+                          }`}
+                          onClick={() => !isOmr && toggleMultipleAnswer(question.id, num)}
+                        >
+                          <Checkbox checked={selected} disabled={isOmr} className="mt-1" />
+                          <div className="flex-1 text-base text-gray-800 leading-relaxed font-normal">
+                            {text && <div dangerouslySetInnerHTML={{ __html: text.replace(/\n/g, '<br/>') }} />}
+                            {img && <img src={img} alt={`Option ${num}`} className="mt-2 max-w-full h-auto rounded border" />}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : question.type === 'numerical' ? (
+                  <div className="mt-3">
+                    <Input
+                      type="number"
+                      placeholder="Enter numerical answer"
+                      value={answers[question.id] || ''}
+                      onChange={(e) => !isOmr && selectAnswer(question.id, e.target.value)}
+                      disabled={isOmr}
+                      className="max-w-xs text-lg py-6"
+                    />
+                  </div>
+                ) : null}
               </div>
+            </div>
+          </div>
 
-              {/* Question */}
-            <Card className="py-0">
-              <CardContent className="p-5 sm:p-6">
-                {question.heading && (
-                  <p className="text-sm font-medium text-amber-700 mb-2">{question.heading}</p>
-                )}
-                {question.directive && (
-                  <p className="text-xs text-gray-500 mb-3">{question.directive}</p>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <div 
-                      className="text-base text-gray-900 leading-relaxed whitespace-pre-wrap"
-                      style={themeConfig ? {
-                        fontSize: `${themeConfig.typography?.questionFontSize || 16}px`,
-                        lineHeight: themeConfig.typography?.lineHeight || 1.6,
-                        color: themeConfig.colorTokens?.text || '#111827',
-                        textAlign: themeConfig.typography?.textAlignment || 'left'
-                      } : {}}
-                      dangerouslySetInnerHTML={{ __html: question.title }}
-                    />
-                  </div>
-                  {/* Bilingual (Hindi) text */}
-                  {(question as any).titleHi && (
-                    <div 
-                      className="text-base text-amber-900 leading-relaxed whitespace-pre-wrap pb-4 md:pb-0 md:border-l md:border-amber-100 md:pl-4"
-                      style={themeConfig ? {
-                        fontSize: `${themeConfig.typography?.questionFontSize || 16}px`,
-                        lineHeight: themeConfig.typography?.lineHeight || 1.6,
-                        textAlign: themeConfig.typography?.textAlignment || 'left'
-                      } : {}}
-                      dangerouslySetInnerHTML={{ __html: (question as any).titleHi }}
-                    />
-                  )}
-                </div>
-                {question.image1 && (
-                  <div className="mt-4 max-w-lg rounded-xl overflow-hidden border border-gray-200">
-                    <MediaImage src={question.image1} alt="Question figure" className="w-full h-auto object-contain bg-gray-50" />
-                  </div>
-                )}
-
-                {/* Options */}
-                <div className="mt-5 space-y-3">
-                  {isOmr && (
-                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-800 font-medium flex items-center gap-2 mb-3">
-                      <AlertTriangle className="size-4 text-amber-600 shrink-0" />
-                      <span>Options are display-only. Please bubble your answer on your physical OMR sheet.</span>
-                    </div>
-                  )}
-                  {['mcq', 'assertion_reason', 'true_false'].includes(question.type?.toLowerCase() || '') ? (
-                    <RadioGroup
-                      value={answers[question.id] || ''}
-                      onValueChange={(val) => !isOmr && selectAnswer(question.id, val)}
-                      disabled={isOmr}
-                    >
-                      {['1', '2', '3', '4', '5'].map((num) => {
-                        const text = (question as any)[`option${num}`]
-                        const textHi = (question as any)[`option${num}Hi`]
-                        if (!text && !textHi && !(question as any)[`option${num}Image`]) return null
-                        return (
-                          <div
-                            key={num}
-                            className={`flex items-start gap-3 p-3 rounded-xl border border-gray-100 transition-colors ${
-                              isOmr
-                                ? 'cursor-default bg-gray-50/40'
-                                : 'hover:border-amber-200 hover:bg-amber-50/30 cursor-pointer'
-                            }`}
-                          >
-                            <RadioGroupItem value={num} id={`q${question.id}-${num}`} disabled={isOmr} className="mt-1" />
-                            <Label htmlFor={`q${question.id}-${num}`} className={`flex-1 space-y-2 ${isOmr ? 'cursor-default' : 'cursor-pointer'}`}>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {text && <div className="text-sm text-gray-800" dangerouslySetInnerHTML={{ __html: text }} />}
-                                {textHi && <div className="text-sm text-amber-800 md:border-l md:border-amber-100 md:pl-4" dangerouslySetInnerHTML={{ __html: textHi }} />}
-                              </div>
-                              {(question as any)[`option${num}Image`] && (
-                                <img src={(question as any)[`option${num}Image`]} alt={`Option ${num}`} className="max-h-32 object-contain rounded border border-gray-100 bg-white mt-2" />
-                              )}
-                            </Label>
-                          </div>
-                        )
-                      })}
-                    </RadioGroup>
-                  ) : question.type?.toLowerCase() === 'multiple_correct' ? (
-                    <div className="space-y-3">
-                      {['1', '2', '3', '4', '5'].map((num) => {
-                        const text = (question as any)[`option${num}`]
-                        const textHi = (question as any)[`option${num}Hi`]
-                        if (!text && !textHi && !(question as any)[`option${num}Image`]) return null
-                        const selected = (answers[question.id] || '').split(',').includes(num)
-                        return (
-                          <div
-                            key={num}
-                            className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${
-                              isOmr
-                                ? 'cursor-default bg-gray-50/40 border-gray-100'
-                                : selected
-                                ? 'border-amber-300 bg-amber-50/50 cursor-pointer'
-                                : 'border-gray-100 hover:border-amber-200 cursor-pointer'
-                            }`}
-                            onClick={() => !isOmr && toggleMultipleAnswer(question.id, num)}
-                          >
-                            <Checkbox checked={selected} disabled={isOmr} className="mt-1" />
-                            <div className="flex-1 space-y-2">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {text && <div className="text-sm text-gray-800" dangerouslySetInnerHTML={{ __html: text }} />}
-                                {textHi && <div className="text-sm text-amber-800 md:border-l md:border-amber-100 md:pl-4" dangerouslySetInnerHTML={{ __html: textHi }} />}
-                              </div>
-                              {(question as any)[`option${num}Image`] && (
-                                <img src={(question as any)[`option${num}Image`]} alt={`Option ${num}`} className="max-h-32 object-contain rounded border border-gray-100 bg-white mt-2" />
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : question.type?.toLowerCase() === 'numerical' ? (
-                    <div className="mt-3">
-                      <Input
-                        type="number"
-                        placeholder="Enter your answer"
-                        value={answers[question.id] || ''}
-                        onChange={(e) => !isOmr && selectAnswer(question.id, e.target.value)}
-                        disabled={isOmr}
-                        className="max-w-xs"
-                      />
-                    </div>
-                  ) : (
-                    <RadioGroup
-                      value={answers[question.id] || ''}
-                      onValueChange={(val) => !isOmr && selectAnswer(question.id, val)}
-                      disabled={isOmr}
-                    >
-                      {['1', '2', '3', '4', '5'].map((num) => {
-                        const text = (question as any)[`option${num}`]
-                        if (!text) return null
-                        return (
-                          <div
-                            key={num}
-                            className={`flex items-center gap-3 p-3 rounded-xl border border-gray-100 transition-colors ${
-                              isOmr
-                                ? 'cursor-default bg-gray-50/40'
-                                : 'hover:border-amber-200 cursor-pointer'
-                            }`}
-                          >
-                            <RadioGroupItem value={num} id={`q${question.id}-${num}`} disabled={isOmr} />
-                            <Label htmlFor={`q${question.id}-${num}`} className={`flex-1 space-y-2 ${isOmr ? 'cursor-default' : 'cursor-pointer'}`}>
-                              <span className="text-sm text-gray-800 block">{text}</span>
-                              {(question as any)[`option${num}Image`] && (
-                                <img src={(question as any)[`option${num}Image`]} alt={`Option ${num}`} className="max-h-32 object-contain rounded border border-gray-100 bg-white" />
-                              )}
-                            </Label>
-                          </div>
-                        )
-                      })}
-                    </RadioGroup>
-                  )}
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="mt-3 flex items-center gap-2">
-                  {answers[question.id] && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-500 hover:text-gray-700"
-                      onClick={() => setAnswers((prev) => {
-                        const next = { ...prev }
-                        delete next[question.id]
-                        return next
-                      })}
-                    >
-                      Clear Answer
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-600 hover:bg-red-50 ml-auto"
-                    onClick={() => {
-                      setReportingQuestionId(question.id)
-                      setReportModalOpen(true)
-                    }}
-                  >
-                    <AlertCircle className="size-4 mr-1" />
-                    Report Error
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Navigation */}
-            <div className="flex items-center justify-between">
+          {/* Action Bar */}
+          <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
               <Button
                 variant="outline"
-                onClick={() => setCurrentQ(Math.max(0, currentQ - 1))}
+                className="bg-white hover:bg-gray-100 font-semibold text-gray-700"
+                onClick={() => handleReviewAndNext(question.id)}
+              >
+                Mark for Review & Next
+              </Button>
+              <Button
+                variant="outline"
+                className="bg-white hover:bg-gray-100 font-semibold text-gray-700"
+                onClick={() => clearAnswer(question.id)}
+                disabled={!answers[question.id]}
+              >
+                Clear Response
+              </Button>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (currentQ > 0) goToQuestion(currentQ - 1, questions[currentQ - 1].id)
+                }}
                 disabled={currentQ === 0}
+                className="bg-white font-semibold text-gray-700"
               >
                 <ChevronLeft className="size-4 mr-1" />
                 Previous
               </Button>
-              <span className="text-sm text-gray-400">
-                {currentQ + 1} / {questions.length}
-              </span>
               <Button
-                variant="outline"
-                onClick={() => setCurrentQ(Math.min(questions.length - 1, currentQ + 1))}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6"
+                onClick={() => {
+                  if (markedForReview.has(question.id)) {
+                    setMarkedForReview(prev => {
+                      const next = new Set(prev)
+                      next.delete(question.id)
+                      return next
+                    })
+                  }
+                  handleNext()
+                }}
                 disabled={currentQ === questions.length - 1}
               >
-                Next
+                Save & Next
                 <ChevronRight className="size-4 ml-1" />
               </Button>
             </div>
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className={`w-80 bg-blue-50 border-l border-gray-300 flex flex-col shrink-0 transition-all ${sidebarOpen ? 'block' : 'hidden md:flex'}`}>
+          <div className="p-4 bg-blue-100/50 border-b border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gray-200 rounded-lg overflow-hidden shrink-0">
+                {/* Placeholder for user image */}
+                <div className="w-full h-full bg-indigo-100 flex items-center justify-center text-indigo-400">
+                  <ClipboardList className="size-6" />
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-gray-800 truncate">Test Taker</div>
+                <div className="text-xs text-gray-500">Student</div>
+              </div>
+            </div>
+            
+            {/* Legend Stats Grid */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-medium">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded flex items-center justify-center bg-green-500 text-white shadow-sm border-b-2 border-green-700">{answeredCnt}</div>
+                <span className="text-gray-600">Answered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded flex items-center justify-center bg-red-500 text-white shadow-sm border-b-2 border-red-700">{notAnsweredCnt}</div>
+                <span className="text-gray-600">Not Answered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded flex items-center justify-center bg-gray-100 text-gray-600 border border-gray-200">{notVisitedCnt}</div>
+                <span className="text-gray-600">Not Visited</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded flex items-center justify-center bg-purple-500 text-white shadow-sm border-b-2 border-purple-700">{markedCnt}</div>
+                <span className="text-gray-600">Marked for Review</span>
+              </div>
+              <div className="flex items-center gap-2 col-span-2">
+                <div className="w-6 h-6 rounded flex items-center justify-center bg-purple-500 text-white shadow-sm border-b-2 border-purple-700 relative">
+                  {markedAndAnsweredCnt}
+                  <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-white"></div>
+                </div>
+                <span className="text-gray-600">Answered & Marked for Review</span>
+              </div>
             </div>
           </div>
-          ) : null}
-        </div>
-      </div>
 
-      {/* Mobile Question Nav */}
-      {questions.length > 0 && (
-        <div className="md:hidden border-t border-gray-200 bg-white p-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            {displayedQuestions.map(({q, idx}) => {
-              const isAnswered = !!answers[q.id]
-              const isCurrent = idx === currentQ
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentQ(idx)}
-                  className={`w-8 h-8 rounded-lg text-xs font-medium flex items-center justify-center shrink-0 ${
-                    isCurrent ? 'bg-amber-600 text-white' :
-                    isAnswered ? 'bg-emerald-100 text-emerald-700' :
-                    'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              )
-            })}
+          <div className="flex-1 overflow-y-auto p-4">
+            <h3 className="font-bold text-sm text-gray-700 mb-3 bg-blue-100 px-3 py-1.5 rounded text-center">
+              {question.section || 'General'}
+            </h3>
+            <div className="grid grid-cols-5 gap-3">
+              {questions.map((q, idx) => {
+                if ((q.section || 'General') !== (question.section || 'General')) return null
+
+                const isAns = !!answers[q.id]
+                const isMark = markedForReview.has(q.id)
+                const isVis = visitedQuestions.has(q.id)
+
+                let btnClass = 'bg-gray-100 text-gray-600 border border-gray-300' // Not visited
+                let bubbleHtml: React.ReactNode = null
+
+                if (isVis) {
+                  if (isAns && isMark) {
+                    btnClass = 'bg-purple-500 text-white shadow-sm border-b-2 border-purple-700'
+                    bubbleHtml = <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-white"></div>
+                  } else if (isMark) {
+                    btnClass = 'bg-purple-500 text-white shadow-sm border-b-2 border-purple-700'
+                  } else if (isAns) {
+                    btnClass = 'bg-green-500 text-white shadow-sm border-b-2 border-green-700'
+                  } else {
+                    btnClass = 'bg-red-500 text-white shadow-sm border-b-2 border-red-700'
+                  }
+                }
+
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => goToQuestion(idx, q.id)}
+                    className={`relative w-full aspect-square rounded-md text-sm font-bold flex items-center justify-center transition-all hover:-translate-y-0.5 hover:shadow-md ${btnClass}`}
+                  >
+                    {idx + 1}
+                    {bubbleHtml}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white border-t border-gray-200">
+            <Button
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-6 text-base"
+              onClick={() => handleSubmit(false)}
+              disabled={submitting}
+            >
+              {submitting ? <Loader2 className="size-5 animate-spin mr-2" /> : null}
+              Submit Test
+            </Button>
           </div>
         </div>
-      )}
+      </div>)}
+
+      {/* Mobile Toggle Sidebar */}
+      <button 
+        className="md:hidden fixed bottom-4 right-4 z-50 w-12 h-12 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+      >
+        <Menu className="size-6" />
+      </button>
 
       {/* Submit Confirmation Dialog */}
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Submit Test?</DialogTitle>
+            <DialogTitle className="text-xl">Submit Test</DialogTitle>
             <DialogDescription>
-              Are you sure you want to submit the test? This action cannot be undone.
-            </DialogDescription>
+                Are you sure you want to submit the test? You cannot change your answers after submission.
+                {unattemptedPenalty > 0 && notAnsweredCnt > 0 && (
+                  <div className="mt-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-md font-semibold text-left">
+                    Warning: You have {notAnsweredCnt} unattempted questions! 
+                    Your exam profile has a penalty ({unattemptedPenalty} marks) for leaving questions completely blank. 
+                    {optionCount === 5 && " Please select the 5th option (E) if you do not want to attempt."}
+                  </div>
+                )}
+              </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Questions answered:</span>
-              <span className="font-medium">{Object.keys(answers).length} / {questions.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Unanswered:</span>
-              <span className="font-medium">{questions.length - Object.keys(answers).length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Marked for review:</span>
-              <span className="font-medium">{markedForReview.size}</span>
-            </div>
-            {questions.length - Object.keys(answers).length > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg text-amber-700">
-                <AlertTriangle className="size-4 shrink-0" />
-                <span>You have {questions.length - Object.keys(answers).length} unanswered question(s).</span>
+          
+          <div className="py-4">
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h4 className="text-center font-bold text-gray-700 border-b pb-2 mb-3">Exam Summary</h4>
+              <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+                <div className="flex justify-between font-medium">
+                  <span className="text-gray-500">Total:</span>
+                  <span>{questions.length}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span className="text-green-600">Answered:</span>
+                  <span>{answeredCnt + markedAndAnsweredCnt}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span className="text-red-500">Not Answered:</span>
+                  <span>{notAnsweredCnt}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span className="text-purple-600">Marked:</span>
+                  <span>{markedCnt}</span>
+                </div>
+                <div className="flex justify-between font-medium col-span-2 border-t pt-2 mt-1">
+                  <span className="text-gray-500">Not Visited:</span>
+                  <span>{notVisitedCnt}</span>
+                </div>
               </div>
-            )}
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancel</Button>
             <Button
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
               onClick={() => handleSubmit(true)}
               disabled={submitting}
             >
               {submitting ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-              Submit Test
+              Confirm Submit
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1278,44 +1193,33 @@ const questions = test?.questions || []
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Report Question Modal */}
-      <Dialog open={reportModalOpen} onOpenChange={(open) => !open && setReportModalOpen(false)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertCircle className="size-5" />
-              Report Error
-            </DialogTitle>
-            <DialogDescription>
-              Please describe the issue with this question (e.g. wrong answer key, missing options, typing error).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <textarea
-              className="w-full min-h-[100px] p-3 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
-              placeholder="What's wrong with this question?..."
-              value={reportReason}
-              onChange={(e) => setReportReason(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setReportModalOpen(false); setReportReason(''); }} disabled={submittingReport}>
-              Cancel
-            </Button>
-            <Button 
-              className="bg-red-600 hover:bg-red-700 text-white" 
-              onClick={handleReportSubmit} 
-              disabled={submittingReport || !reportReason.trim()}
-            >
-              {submittingReport ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-              Submit Report
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

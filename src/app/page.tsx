@@ -59,7 +59,7 @@ class ChunkErrorBoundary extends Component<
 // Only the Login component is loaded initially; other layouts load on demand.
 const CMSLayoutComponent = lazy(() => import('@/components/cms/cms-layout'))
 const AdminLayoutComponent = lazy(() => import('@/components/admin/admin-layout'))
-const StudentLayoutComponent = lazy(() => import('@/components/student-portal/student-layout'))
+
 const LoginComponent = lazy(() => import('@/components/login/login-page'))
 
 // ── Loading fallback ────────────────────────────────────────────────────────
@@ -86,8 +86,7 @@ function ViewRouter() {
             return <CMSLayoutComponent />
           case 'admin':
             return <AdminLayoutComponent />
-          case 'student':
-            return <StudentLayoutComponent />
+          
           case 'login':
           default:
             return <LoginComponent />
@@ -109,3 +108,4 @@ export default function Home() {
     </main>
   )
 }
+

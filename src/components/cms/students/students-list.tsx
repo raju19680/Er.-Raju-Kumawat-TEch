@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
 import {
@@ -260,6 +260,17 @@ export default function StudentsList() {
   const [submitting, setSubmitting] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
+  // Product Assignment State
+  const [availableProducts, setAvailableProducts] = useState<{
+    courses: { id: string, title: string, price: number }[],
+    testSeries: { id: string, title: string, price: number }[],
+    digitalProducts: { id: string, title: string, price: number }[]
+  } | null>(null)
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
+  const [selectedProductType, setSelectedProductType] = useState('COURSE')
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [assigningProduct, setAssigningProduct] = useState(false)
+
   // Filters
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'' | 'active' | 'inactive' | 'blocked'>('')
@@ -350,6 +361,7 @@ export default function StudentsList() {
       const json = await res.json()
       if (!json.success) throw new Error(json.error || 'Failed to load student detail')
       setDetailSheet({ open: true, studentId, data: json.data, loading: false })
+      fetchAvailableProducts(studentId)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load student detail')
       setDetailSheet((prev) => ({ ...prev, loading: false }))
@@ -492,6 +504,69 @@ export default function StudentsList() {
         }
       } else {
         toast.error(data.error || 'Failed to unblock student')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const fetchAvailableProducts = async (studentId: string) => {
+    try {
+      const res = await apiFetch(`/api/teacher/students/${studentId}/purchases`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setAvailableProducts({
+            courses: data.courses || [],
+            testSeries: data.testSeries || [],
+            digitalProducts: data.digitalProducts || []
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch products', error)
+    }
+  }
+
+  const handleAssignProduct = async () => {
+    if (!detailSheet.studentId || !selectedProductId) return
+    setAssigningProduct(true)
+    try {
+      const res = await apiFetch(`/api/teacher/students/${detailSheet.studentId}/purchases`, {
+        method: 'POST',
+        body: JSON.stringify({ type: selectedProductType, productId: selectedProductId })
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Product assigned successfully')
+        setAssignDialogOpen(false)
+        fetchStudentDetail(detailSheet.studentId)
+      } else {
+        toast.error(data.error || 'Failed to assign product')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    } finally {
+      setAssigningProduct(false)
+    }
+  }
+
+  const handleRevokeProduct = async (type: string, productId: string) => {
+    if (!detailSheet.studentId) return
+    if (!confirm('Are you sure you want to revoke this product?')) return
+    setActionLoading('revoke-'+productId)
+    try {
+      const res = await apiFetch(`/api/teacher/students/${detailSheet.studentId}/purchases?type=${type}&productId=${productId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Product revoked successfully')
+        fetchStudentDetail(detailSheet.studentId)
+      } else {
+        toast.error(data.error || 'Failed to revoke product')
       }
     } catch {
       toast.error('Network error. Please try again.')
@@ -1010,6 +1085,50 @@ export default function StudentsList() {
         </CardContent>
       </Card>
 
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Free Product</DialogTitle>
+            <DialogDescription>Assign a course, test series, or digital product to this student for free.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Product Type</Label>
+              <Select value={selectedProductType} onValueChange={(val) => { setSelectedProductType(val); setSelectedProductId('') }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="COURSE">Course</SelectItem>
+                  <SelectItem value="TEST_SERIES">Test Series</SelectItem>
+                  <SelectItem value="DIGITAL_PRODUCT">Digital Product</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Select Product</Label>
+              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a product" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedProductType === 'COURSE' && availableProducts?.courses.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+                  {selectedProductType === 'TEST_SERIES' && availableProducts?.testSeries.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+                  {selectedProductType === 'DIGITAL_PRODUCT' && availableProducts?.digitalProducts.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAssignProduct} disabled={!selectedProductId || assigningProduct}>
+              {assigningProduct ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+              Assign Product
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Student Detail Sheet */}
       <Sheet open={detailSheet.open} onOpenChange={(open) => {
         if (!open) setDetailSheet({ open: false, studentId: null, data: null, loading: false })
@@ -1226,40 +1345,53 @@ export default function StudentsList() {
 
                   <Separator />
 
-                  {/* Purchased Courses */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                      Purchased Courses
-                      <span className="text-xs text-muted-foreground font-normal ml-2">
-                        ({detailSheet.data.purchasedCoursesCount})
-                      </span>
-                    </h3>
-                    {detailSheet.data.purchasedCourses.length === 0 ? (
-                      <div className="text-center py-6 bg-gray-50 rounded-lg">
-                        <BookOpen className="size-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-xs text-muted-foreground">No purchased courses</p>
+                  {/* Purchased Products */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          Purchased Products
+                          <span className="text-xs text-muted-foreground font-normal ml-2">
+                            ({detailSheet.data.purchasedCoursesCount + (detailSheet.data.purchasedTestSeriesCount || 0) + (detailSheet.data.purchasedDigitalProductsCount || 0)})
+                          </span>
+                        </h3>
+                        <Button variant="outline" size="sm" onClick={() => setAssignDialogOpen(true)}>
+                          <Plus className="size-4 mr-2" /> Assign Free
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {detailSheet.data.purchasedCourses.map((pc) => (
-                          <div key={pc.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
-                            <div className="flex items-center justify-center size-9 rounded-lg bg-gray-100">
-                              <BookOpen className="size-4 text-gray-500" />
+                      {[...(detailSheet.data.purchasedCourses || []), ...(detailSheet.data.purchasedTestSeries || []), ...(detailSheet.data.purchasedDigitalProducts || [])].length === 0 ? (
+                        <div className="text-center py-6 bg-gray-50 rounded-lg">
+                          <BookOpen className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+                          <p className="text-xs text-muted-foreground">No purchased products</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                          {[...(detailSheet.data.purchasedCourses || []), ...(detailSheet.data.purchasedTestSeries || []), ...(detailSheet.data.purchasedDigitalProducts || [])].map((pc: any) => (
+                            <div key={pc.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 group hover:border-gray-300 transition-colors">
+                              <div className="flex items-center justify-center size-9 rounded-lg bg-gray-100">
+                                <BookOpen className="size-4 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{pc.course?.title || pc.testSeries?.title || pc.digitalProduct?.title || 'Unknown Product'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {pc.course ? 'Course' : pc.testSeries ? 'Test Series' : 'Digital Product'} • Purchased {formatDate(pc.purchasedAt || pc.createdAt)}
+                                </p>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleRevokeProduct(pc.course ? 'COURSE' : pc.testSeries ? 'TEST_SERIES' : 'DIGITAL_PRODUCT', pc.courseId || pc.testSeriesId || pc.digitalProductId)}
+                                disabled={actionLoading === 'revoke-'+(pc.courseId || pc.testSeriesId || pc.digitalProductId)}
+                              >
+                                {actionLoading === 'revoke-'+(pc.courseId || pc.testSeriesId || pc.digitalProductId) ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                              </Button>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">{pc.course.title}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Purchased {formatDate(pc.purchasedAt)}
-                                {pc.course.price > 0 && ` · ₹${pc.course.price}`}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                  <Separator />
+                    <Separator />
 
                   {/* Test Attempts */}
                   <div>

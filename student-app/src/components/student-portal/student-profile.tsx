@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -68,7 +68,7 @@ export default function StudentProfile() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const res = await apiFetchJSON<{ success: boolean; student: ProfileData }>('/api/student/profile')
+        const res = await apiFetchJSON<{ success: boolean; student: ProfileData }>('/api/student/profile', { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } })
         if (res.success && res.student) {
           setName(res.student.name)
           setPhone(res.student.phone || '')
@@ -128,8 +128,13 @@ export default function StudentProfile() {
   })
 
   const handleSavePersonal = async () => {
+    const cleanedPhone = phone.replace(/[^0-9]/g, '')
     if (!name.trim()) {
       toast.error('Name is required')
+      return
+    }
+    if (cleanedPhone.length < 10) {
+      toast.error('A valid 10-digit mobile number is mandatory')
       return
     }
     setSavingPersonal(true)
@@ -333,9 +338,7 @@ export default function StudentProfile() {
               <Label htmlFor="name" className="text-sm font-medium text-gray-700">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                <Input
-                  id="name"
-                  value={name}
+                <Input disabled id="name" value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="pl-9"
                   placeholder="Your full name"
@@ -358,12 +361,10 @@ export default function StudentProfile() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium text-gray-700">Phone Number</Label>
+              <Label htmlFor="phone" className="text-sm font-medium text-gray-700">Phone Number <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                <Input
-                  id="phone"
-                  value={phone}
+                <Input disabled id="phone" value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="pl-9"
                   placeholder="Enter phone number"
@@ -371,12 +372,7 @@ export default function StudentProfile() {
               </div>
             </div>
           </CardContent>
-          <CardFooter className="bg-gray-50 px-5 py-3 sm:px-6 flex justify-end rounded-b-xl border-t">
-            <Button onClick={handleSavePersonal} disabled={savingPersonal} className="bg-amber-600 hover:bg-amber-700 text-white">
-              {savingPersonal ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
-              Save Personal Info
-            </Button>
-          </CardFooter>
+          <div className="px-5 py-3 sm:px-6 text-sm text-gray-500 italic border-t bg-gray-50 rounded-b-xl">To change your personal details, please contact your teacher or administrator.</div>
         </Card>
       </motion.div>
 
@@ -551,3 +547,6 @@ export default function StudentProfile() {
     </div>
   )
 }
+
+
+

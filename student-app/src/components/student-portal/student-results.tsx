@@ -92,7 +92,7 @@ export default function StudentResults() {
   }, [])
 
   const filtered = attempts
-    .filter((a) => a.status === 'completed')
+    .filter((a) => a.status === 'completed' || a.status === 'omr_pending')
     .filter((a) =>
       a.test.title.toLowerCase().includes(search.toLowerCase()) ||
       (a.test.testSeries?.title || '').toLowerCase().includes(search.toLowerCase())
@@ -201,7 +201,8 @@ export default function StudentResults() {
       ) : (
         <div className="space-y-3">
           {filtered.map((attempt, idx) => {
-            const pct = attempt.totalMarks > 0 ? Math.round((attempt.score / attempt.totalMarks) * 100) : 0
+            const isPending = attempt.status === 'omr_pending'
+              const pct = attempt.totalMarks > 0 ? Math.round((attempt.score / attempt.totalMarks) * 100) : 0
             const timeMins = Math.floor(attempt.timeTaken / 60)
             const timeSecs = attempt.timeTaken % 60
 
@@ -218,12 +219,12 @@ export default function StudentResults() {
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                       <div className={`flex items-center justify-center w-12 h-12 rounded-xl shrink-0 ${
-                        pct >= 60 ? 'bg-emerald-50' : pct >= 40 ? 'bg-amber-50' : 'bg-red-50'
-                      }`}>
-                        <Trophy className={`size-6 ${
-                          pct >= 60 ? 'text-emerald-600' : pct >= 40 ? 'text-amber-600' : 'text-red-500'
-                        }`} />
-                      </div>
+                          isPending ? 'bg-amber-50' : pct >= 60 ? 'bg-emerald-50' : pct >= 40 ? 'bg-amber-50' : 'bg-red-50'
+                        }`}>
+                          {isPending ? <Clock className="size-6 text-amber-600" /> : <Trophy className={`size-6 ${
+                            pct >= 60 ? 'text-emerald-600' : pct >= 40 ? 'text-amber-600' : 'text-red-500'
+                          }`} />}
+                        </div>
 
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
@@ -245,14 +246,20 @@ export default function StudentResults() {
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
-                        <div className="w-20">
-                          <Progress value={pct} className="h-2" />
-                        </div>
-                        <span className={`text-lg font-bold ${
-                          pct >= 60 ? 'text-emerald-600' : pct >= 40 ? 'text-amber-600' : 'text-red-500'
-                        }`}>
-                          {pct}%
-                        </span>
+                        {isPending ? (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">Pending Review</Badge>
+                          ) : (
+                            <>
+                              <div className="w-20">
+                                <Progress value={pct} className="h-2" />
+                              </div>
+                              <span className={`text-lg font-bold ${
+                                pct >= 60 ? 'text-emerald-600' : pct >= 40 ? 'text-amber-600' : 'text-red-500'
+                              }`}>
+                                {pct}%
+                              </span>
+                            </>
+                          )}
                       </div>
                     </div>
                   </CardContent>

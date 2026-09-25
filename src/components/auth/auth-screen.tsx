@@ -327,7 +327,7 @@ export function AuthScreen() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reg-email">Email</Label>
+                      <Label htmlFor="reg-email">Email <span className="text-red-500">*</span></Label>
                       <Input
                         id="reg-email"
                         type="email"
@@ -350,14 +350,14 @@ export function AuthScreen() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="reg-phone">Mobile Number {role === 'STUDENT' && '*'}</Label>
+                        <Label htmlFor="reg-phone">Mobile Number <span className="text-red-500">*</span></Label>
                         <Input
                           id="reg-phone"
                           type="tel"
                           placeholder="+91 9876543210"
                           value={regPhone}
                           onChange={(e) => setRegPhone(e.target.value)}
-                          required={role === 'STUDENT'}
+                          required
                         />
                       </div>
                     </div>
@@ -389,3 +389,4 @@ export function AuthScreen() {
     </div>
   )
 }
+

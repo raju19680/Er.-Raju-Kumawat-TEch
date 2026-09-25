@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (teacher.role !== 'teacher') {
+    const allowedRoles = ['teacher', 'org_admin', 'admin', 'ADMIN', 'platform_admin']
+    if (!allowedRoles.includes(teacher.role)) {
       return NextResponse.json(
         { success: false, message: 'User is not a teacher.' },
         { status: 400 }
@@ -88,3 +89,4 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+

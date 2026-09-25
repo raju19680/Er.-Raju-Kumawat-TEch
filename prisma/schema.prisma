@@ -425,6 +425,9 @@ model Test {
   pdfPasswordProtected Boolean       @default(false)
   themeId              String?
   themeSnapshot        String?
+    isRssbTheme          Boolean       @default(false)
+    autoGeneratePdf      Boolean       @default(false)
+    strictTenPercentRule Boolean       @default(false)
   richSnippets         Boolean       @default(true)
   seoDescription       String?
   seoTitle             String?
@@ -1760,3 +1763,5 @@ model Streak {
   updatedAt     DateTime @updatedAt
   student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
+
+

@@ -81,6 +81,7 @@ interface AttemptData {
     numberOfQuestions: number
     showSolution: boolean
     displayResults: boolean
+      testMode?: string
     testSeries: { id: string; title: string } | null
   }
   questionReview: QuestionReview[]
@@ -470,7 +471,8 @@ export default function TestResult() {
                     <div className="space-y-2">
                       {['1', '2', '3', '4', '5'].map((num) => {
                         const text = (q as any)[`option${num}`]
-                        if (!text) return null
+                          const isOmr = data.test.testMode === 'OMR' || data.status === 'omr_pending';
+                          if (!text && !(isOmr && parseInt(num) <= 4)) return null
                         const isCorrect = q.correctOption?.split(',').map(s => s.trim()).includes(num)
                         const isSelected = q.selectedOption === num
                         return (
@@ -484,7 +486,7 @@ export default function TestResult() {
                           >
                             <span className="font-medium text-gray-600">{num}.</span>
                             <div className="flex-1 space-y-1">
-                              <span className="text-gray-800 block">{text}</span>
+                              {text ? <span className="text-gray-800 block">{text}</span> : (isOmr && parseInt(num) <= 4) ? <span className="text-gray-800 block">Option {String.fromCharCode(64 + parseInt(num))}</span> : null}
                               {(q as any)[`option${num}Image`] && (
                                 <img src={(q as any)[`option${num}Image`]} alt={`Option ${num}`} className="max-h-24 object-contain rounded border border-gray-100 bg-white" />
                               )}

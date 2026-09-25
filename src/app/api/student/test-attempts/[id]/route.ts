@@ -229,7 +229,7 @@ export async function PUT(
     // Get the attempt
     const attempt = await db.testAttempt.findFirst({
       where: { id, studentId: student.id, status: 'in_progress' },
-      include: { test: { select: { testMode: true } } }
+      include: { test: { select: { testMode: true, isRssbTheme: true, strictTenPercentRule: true } } }
     })
 
     if (!attempt) {
@@ -266,11 +266,19 @@ export async function PUT(
 
     // Calculate score
     let score = 0
+    let completelyBlankCount = 0
     const answersMap = answers?.answers || answers || {}
 
     for (const q of questions) {
       const selectedOption = answersMap[q.id]
-      if (!selectedOption) continue
+      if (!selectedOption) {
+        completelyBlankCount++
+        continue
+      }
+
+      if (attempt.test.isRssbTheme && selectedOption === '5') {
+        continue
+      }
 
       const correctOptions = q.correctOption ? q.correctOption.split(',').map((s: string) => s.trim()) : []
 
@@ -278,6 +286,15 @@ export async function PUT(
         score += q.positiveMarks
       } else {
         score -= Math.abs(q.negativeMarks)
+      }
+    }
+
+    let isDisqualified = false
+    if (attempt.test.strictTenPercentRule) {
+      const tenPercent = Math.floor(questions.length * 0.1)
+      if (completelyBlankCount > tenPercent) {
+        isDisqualified = true
+        score = 0 
       }
     }
 
@@ -296,7 +313,7 @@ export async function PUT(
         answers: JSON.stringify(finalPayload),
         score,
         timeTaken: timeTaken || 0,
-        status: 'completed',
+        status: isDisqualified ? 'disqualified' : 'completed',
         completedAt: new Date(),
       },
     })
@@ -306,7 +323,7 @@ export async function PUT(
       const higherScores = await db.testAttempt.count({
         where: {
           testId: attempt.testId,
-          status: 'completed',
+          status: isDisqualified ? 'disqualified' : 'completed',
           isPractice: false,
           score: { gt: score },
         },
@@ -318,7 +335,7 @@ export async function PUT(
       const totalRanked = await db.testAttempt.count({
         where: {
           testId: attempt.testId,
-          status: 'completed',
+          status: isDisqualified ? 'disqualified' : 'completed',
           isPractice: false
         },
       })
@@ -348,3 +365,7 @@ export async function PUT(
     return NextResponse.json({ success: false, message: 'Something went wrong' }, { status: 500 })
   }
 }
+
+
+
+

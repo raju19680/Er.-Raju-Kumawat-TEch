@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Lock, FileText, DownloadCloud, ChevronLeft, ChevronRight, Loader2, BookOpen, File as FileIcon, LayoutList } from 'lucide-react'
+import { Lock, FileText, DownloadCloud, ChevronLeft, ChevronRight, Loader2, BookOpen, File as FileIcon, LayoutList, ZoomIn, ZoomOut } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { apiFetchJSON } from '@/lib/api-client'
 import { Document, Page, pdfjs } from 'react-pdf'
@@ -49,6 +49,7 @@ export function SecurePdfViewer({
   // PDF State
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(initialPage && initialPage > 0 ? initialPage : 1)
+  const [scale, setScale] = useState(1.0)
   const [viewMode, setViewMode] = useState<'single' | 'continuous' | 'book'>('single')
 
   useEffect(() => {
@@ -185,6 +186,12 @@ export function SecurePdfViewer({
             </button>
           </div>
 
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button onClick={() => setScale(s => Math.max(0.5, s - 0.2))} className="p-1.5 rounded-md transition-colors text-gray-500 hover:text-gray-900 hover:bg-white" title="Zoom Out"><ZoomOut className="size-4" /></button>
+            <div className="px-2 py-1.5 text-xs font-semibold text-gray-700 w-12 text-center my-auto">{Math.round(scale * 100)}%</div>
+            <button onClick={() => setScale(s => Math.min(3.0, s + 0.2))} className="p-1.5 rounded-md transition-colors text-gray-500 hover:text-gray-900 hover:bg-white" title="Zoom In"><ZoomIn className="size-4" /></button>
+          </div>
+
           {numPages && viewMode === 'single' && (
             <div className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
               <button 
@@ -265,7 +272,7 @@ export function SecurePdfViewer({
           {viewMode === 'single' && (
             <Page 
               pageNumber={pageNumber} 
-              renderTextLayer={false}
+              renderTextLayer={false} scale={scale}
               renderAnnotationLayer={false}
               width={width}
               className="bg-white rounded mb-4"
@@ -276,7 +283,7 @@ export function SecurePdfViewer({
             <Page 
               key={`page_${index + 1}`}
               pageNumber={index + 1} 
-              renderTextLayer={false}
+              renderTextLayer={false} scale={scale}
               renderAnnotationLayer={false}
               width={width}
               className="bg-white rounded mb-6 shadow-sm"
@@ -289,7 +296,7 @@ export function SecurePdfViewer({
                 <div className="flex justify-center w-full">
                   <Page 
                     pageNumber={1} 
-                    renderTextLayer={false}
+                    renderTextLayer={false} scale={scale}
                     renderAnnotationLayer={false}
                     width={width}
                     className="bg-white rounded shadow-sm"
@@ -299,7 +306,7 @@ export function SecurePdfViewer({
                 <>
                   <Page 
                     pageNumber={pageNumber} 
-                    renderTextLayer={false}
+                    renderTextLayer={false} scale={scale}
                     renderAnnotationLayer={false}
                     width={width / 2 - 10}
                     className="bg-white rounded shadow-sm border-r border-gray-200"
@@ -307,7 +314,7 @@ export function SecurePdfViewer({
                   {pageNumber + 1 <= numPages && (
                     <Page 
                       pageNumber={pageNumber + 1} 
-                      renderTextLayer={false}
+                      renderTextLayer={false} scale={scale}
                       renderAnnotationLayer={false}
                       width={width / 2 - 10}
                       className="bg-white rounded shadow-sm border-l border-gray-200"
@@ -322,3 +329,13 @@ export function SecurePdfViewer({
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+

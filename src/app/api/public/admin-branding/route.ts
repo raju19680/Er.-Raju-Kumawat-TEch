@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAuthUser } from '@/lib/auth-helpers'
 
-export const revalidate = 0 // Don't cache since it depends on the auth token
+export const revalidate = 0 // Don't cache
 
 export async function GET(req: NextRequest) {
   try {
     // ALWAYS return platform admin branding for the CMS / Admin portal
     const admin = await db.user.findFirst({
+      where: { 
+        role: 'platform_admin',
+        email: 'rajulalkumawat1995@gmail.com'
+      },
+      select: { avatar: true, name: true },
+    }) || await db.user.findFirst({
       where: { role: 'platform_admin' },
       select: { avatar: true, name: true },
-    })
+    });
 
     return NextResponse.json({
       success: true,

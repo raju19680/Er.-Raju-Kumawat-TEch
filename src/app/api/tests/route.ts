@@ -126,6 +126,10 @@ export async function POST(request: NextRequest) {
         testMode: body.testMode || 'CBT',
         allowPdfDownload: body.allowPdfDownload ?? false,
         pdfPasswordProtected: body.pdfPasswordProtected ?? false,
+        themeId: body.themeId || null,
+        isRssbTheme: body.isRssbTheme ?? false,
+        strictTenPercentRule: body.strictTenPercentRule ?? false,
+        autoGeneratePdf: body.autoGeneratePdf ?? false,
         attachPdf: body.attachPdf || null,
         allowPdfExport: body.allowPdfExport ?? false,
         partialScoring: body.partialScoring ?? false,
@@ -164,3 +168,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+

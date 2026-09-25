@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -113,6 +114,8 @@ interface FormState {
   examProfileId?: string
   themeId?: string
   seoTitle?: string
+    isRssbTheme: boolean
+    strictTenPercentRule: boolean
   seoDescription?: string
   richSnippets?: boolean
 }
@@ -164,6 +167,8 @@ const defaultFormState: FormState = {
     examProfileId: '',
     themeId: '',
     seoTitle: '',
+      isRssbTheme: false,
+      strictTenPercentRule: false,
     seoDescription: '',
     richSnippets: true,
 }
@@ -234,6 +239,9 @@ function getInitialState(editData?: Record<string, unknown>): FormState {
       examProfileId: (editData.examProfileId as string) || '',
       themeId: (editData.themeId as string) || '',
       seoTitle: (editData.seoTitle as string) || '',
+        isRssbTheme: (editData.isRssbTheme as boolean) || false,
+        autoGeneratePdf: (editData.autoGeneratePdf as boolean) || false,
+        strictTenPercentRule: (editData.strictTenPercentRule as boolean) || false,
       seoDescription: (editData.seoDescription as string) || '',
       richSnippets: editData.richSnippets !== undefined ? (editData.richSnippets as boolean) : true,
   }
@@ -351,6 +359,9 @@ function DrawerFormContent({
     testMode: form.testMode,
     allowPdfDownload: form.allowPdfDownload,
     pdfPasswordProtected: form.pdfPasswordProtected,
+      isRssbTheme: form.themeId === 'rssb',
+      strictTenPercentRule: form.strictTenPercentRule,
+      autoGeneratePdf: form.autoGeneratePdf,
     organizationId: orgCode,
     sections: form.sections.map(s => ({
       sectionName: s.sectionName,
@@ -527,16 +538,27 @@ function DrawerFormContent({
                       className="h-10"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Duration (Minutes)</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g. 60"
-                      value={form.duration}
-                      onChange={(e) => updateField('duration', e.target.value)}
-                      className="h-10"
-                    />
-                  </div>
+                                      <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Duration (Minutes)</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 60"
+                        value={form.duration}
+                        onChange={(e) => updateField('duration', e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Negative Marks (Per Question)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="e.g. 0.25"
+                        value={form.negativeMarks}
+                        onChange={(e) => updateField('negativeMarks', e.target.value)}
+                        className="h-10"
+                      />
+                    </div>
                 </div>
               </CardContent>
             </Card>
@@ -575,41 +597,67 @@ function DrawerFormContent({
                   </Label>
                 </div>
 
-                {form.isPdfTest && (
-                  <div className="space-y-4 p-4 border rounded-lg bg-white">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">PDF File</Label>
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          placeholder="https://example.com/test.pdf"
-                          value={form.pdfUrl}
-                          onChange={(e) => updateField('pdfUrl', e.target.value)}
-                          className="h-10 flex-1"
-                        />
-                        <div className="relative">
-                          <Input 
-                            type="file" 
-                            accept=".pdf" 
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              try {
-                                toast.loading('Uploading PDF...', { id: 'upload-pdf' })
-                                const url = await uploadFile(file, 'document')
-                                updateField('pdfUrl', url)
-                                toast.success('PDF uploaded successfully', { id: 'upload-pdf' })
-                              } catch (err) {
-                                toast.error('Failed to upload PDF', { id: 'upload-pdf' })
-                              }
-                            }}
+                                {form.isPdfTest && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-sm font-semibold">PDF Source</Label>
+                      <RadioGroup 
+                        value={form.autoGeneratePdf ? 'auto' : 'upload'} 
+                        onValueChange={(val) => updateField('autoGeneratePdf', val === 'auto')}
+                        className="flex gap-6 mt-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="upload" id="r-upload" />
+                          <Label htmlFor="r-upload" className="cursor-pointer">Upload Custom PDF</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="auto" id="r-auto" />
+                          <Label htmlFor="r-auto" className="cursor-pointer">Auto-Generate from Questions</Label>
+                        </div>
+                      </RadioGroup>
+                      {form.autoGeneratePdf && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          The system will automatically generate a PDF from the CBT questions you add to this test. Students will see this generated PDF alongside an auto-checked OMR sheet.
+                        </p>
+                      )}
+                    </div>
+
+                    {!form.autoGeneratePdf && (
+                      <div className="space-y-2 pt-4 border-t border-gray-200">
+                        <Label className="text-sm font-semibold">Upload PDF File</Label>
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            placeholder="https://example.com/test.pdf"
+                            value={form.pdfUrl}
+                            onChange={(e) => updateField('pdfUrl', e.target.value)}
+                            className="h-10 flex-1"
                           />
-                          <Button type="button" variant="outline" className="h-10 gap-2 shrink-0">
-                            <Upload className="size-4" /> Upload
-                          </Button>
+                          <div className="relative">
+                            <Input 
+                              type="file" 
+                              accept=".pdf" 
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                try {
+                                  toast.loading('Uploading PDF...', { id: 'upload-pdf' })
+                                  const url = await uploadFile(file, 'document')
+                                  updateField('pdfUrl', url)
+                                  toast.success('PDF uploaded successfully', { id: 'upload-pdf' })
+                                } catch (err) {
+                                  toast.error('Failed to upload PDF', { id: 'upload-pdf' })
+                                }
+                              }}
+                            />
+                            <Button type="button" variant="outline" className="h-10 gap-2 shrink-0">
+                              <Upload className="size-4" /> Upload
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
+                    
                     <div className="flex gap-6">
                       <div className="flex items-center space-x-2">
                         <Checkbox
@@ -899,10 +947,7 @@ function DrawerFormContent({
                       checked={form.richSnippets}
                       onCheckedChange={(v) => updateField('richSnippets', v)}
                     />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">SEO Meta Title</Label>
+                  </div></div>{form.themeId === 'rssb' && (<div className="flex items-center justify-between border border-amber-200 bg-amber-50 rounded-lg p-4 mt-4"><div className="space-y-1"><Label className="text-sm font-medium text-amber-900">10% Unattempted Rule (Debar)</Label><p className="text-xs text-amber-700">If student leaves &gt;10% questions completely blank (without selecting E), they are disqualified.</p></div><Switch checked={form.strictTenPercentRule} onCheckedChange={(v) => updateField('strictTenPercentRule', v)} /></div>)}<div className="space-y-2 mt-4"><Label className="text-sm font-semibold">SEO Meta Title</Label>
                   <Input
                     placeholder="Enter meta title for SEO"
                     value={form.seoTitle}
@@ -952,6 +997,19 @@ export default function AddTestDrawer({ open, onOpenChange, editData, onSave }: 
     </Sheet>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

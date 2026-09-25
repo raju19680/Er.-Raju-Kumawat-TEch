@@ -103,6 +103,10 @@ export async function PUT(
         ...(body.testMode !== undefined && { testMode: body.testMode }),
         ...(body.allowPdfDownload !== undefined && { allowPdfDownload: body.allowPdfDownload }),
         ...(body.pdfPasswordProtected !== undefined && { pdfPasswordProtected: body.pdfPasswordProtected }),
+        ...(body.themeId !== undefined && { themeId: body.themeId || null }),
+        ...(body.isRssbTheme !== undefined && { isRssbTheme: body.isRssbTheme }),
+        ...(body.strictTenPercentRule !== undefined && { strictTenPercentRule: body.strictTenPercentRule }),
+        ...(body.autoGeneratePdf !== undefined && { autoGeneratePdf: body.autoGeneratePdf }),
         ...(body.attachPdf !== undefined && { attachPdf: body.attachPdf || null }),
         ...(body.allowPdfExport !== undefined && { allowPdfExport: body.allowPdfExport }),
         ...(body.partialScoring !== undefined && { partialScoring: body.partialScoring }),
@@ -180,3 +184,6 @@ export async function DELETE(
     )
   }
 }
+
+
+

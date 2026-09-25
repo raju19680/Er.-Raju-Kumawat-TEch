@@ -35,7 +35,8 @@ export async function DELETE(req: NextRequest) {
       include: { organization: true },
     })
 
-    if (!teacher || teacher.role !== 'teacher') {
+    const allowedRoles = ['teacher', 'org_admin', 'admin', 'ADMIN', 'platform_admin']
+    if (!teacher || !allowedRoles.includes(teacher.role)) {
       return NextResponse.json(
         { success: false, message: 'Teacher not found or user is not a teacher.' },
         { status: 404 }
@@ -238,3 +239,4 @@ export async function DELETE(req: NextRequest) {
     )
   }
 }
+

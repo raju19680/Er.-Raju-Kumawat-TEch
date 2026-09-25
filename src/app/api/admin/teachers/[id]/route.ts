@@ -19,7 +19,7 @@ export async function GET(
 
     const { id } = await params
     const teacher = await db.user.findFirst({
-      where: { id, role: 'teacher' },
+      where: { id, role: { in: ['teacher', 'org_admin', 'admin', 'ADMIN', 'platform_admin'] } },
       include: {
         organization: true,
         students: true,
@@ -55,7 +55,7 @@ export async function PUT(
     const body = await req.json()
     const { name, email, phone, password, organizationName, status } = body
 
-    const existing = await db.user.findFirst({ where: { id, role: 'teacher' } })
+    const existing = await db.user.findFirst({ where: { id, role: { in: ['teacher', 'org_admin', 'admin', 'ADMIN', 'platform_admin'] } } })
     if (!existing) {
       return NextResponse.json({ success: false, message: 'Teacher not found' }, { status: 404 })
     }
@@ -123,7 +123,7 @@ export async function DELETE(
     }
 
     const { id } = await params
-    const existing = await db.user.findFirst({ where: { id, role: 'teacher' } })
+    const existing = await db.user.findFirst({ where: { id, role: { in: ['teacher', 'org_admin', 'admin', 'ADMIN', 'platform_admin'] } } })
     if (!existing) {
       return NextResponse.json({ success: false, message: 'Teacher not found' }, { status: 404 })
     }
@@ -136,3 +136,4 @@ export async function DELETE(
     return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 })
   }
 }
+

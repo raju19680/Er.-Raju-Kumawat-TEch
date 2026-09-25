@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth-helpers'
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib-plus-encrypt'
 
 export async function GET(
   req: NextRequest,
@@ -92,6 +92,7 @@ export async function GET(
     let pdfBytes: Uint8Array
     if (test.pdfPasswordProtected && studentPhone) {
       const cleanPassword = studentPhone.replace(/[^0-9]/g, '') || studentPhone
+      await pdfDoc.encrypt({ userPassword: cleanPassword, ownerPassword: cleanPassword })
       pdfBytes = await pdfDoc.save()
     } else {
       pdfBytes = await pdfDoc.save()
@@ -201,3 +202,6 @@ async function createTestPdfDocument(test: any, studentName: string, studentPhon
 
   return pdfDoc
 }
+
+
+

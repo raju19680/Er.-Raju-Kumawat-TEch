@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthStudent } from '@/lib/auth-helpers'
@@ -38,11 +40,19 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, message: error || 'Authentication required' }, { status: status || 401 })
     }
 
+    if (student.id === 'admin-bypass') { return NextResponse.json({ success: false, message: 'Profile updates are disabled when previewing as Admin' }, { status: 403 }) }
+
     const body = await req.json()
     const { name, phone, address, city, state, pincode, avatar, currentPassword, newPassword } = body
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, message: 'Name is required' }, { status: 400 })
+    }
+
+    const cleanPhone = (phone || '').toString().trim().replace(/[^0-9]/g, '')
+    const formattedPhone = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone
+    if (!formattedPhone || formattedPhone.length !== 10) {
+      return NextResponse.json({ success: false, message: 'A valid 10-digit mobile number is mandatory' }, { status: 400 })
     }
 
     // If password change is requested
@@ -76,7 +86,7 @@ export async function PUT(req: NextRequest) {
       where: { id: student.id },
       data: {
         name: name.trim(),
-        phone: phone ? phone.trim() : null,
+        phone: formattedPhone,
         avatar: avatar || student.avatar,
         address: address ? address.trim() : null,
         city: city ? city.trim() : null,
@@ -90,7 +100,7 @@ export async function PUT(req: NextRequest) {
       where: { id: auth.id },
       data: {
         name: name.trim(),
-        ...(phone ? { phone: phone.trim() } : {}),
+        ...(formattedPhone ? { phone: formattedPhone } : {}),
         ...(avatar ? { avatar } : {}),
       },
     }).catch(() => {})
@@ -115,3 +125,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, message: 'Failed to update profile' }, { status: 500 })
   }
 }
+
+
+
+

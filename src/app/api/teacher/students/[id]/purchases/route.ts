@@ -129,3 +129,68 @@ export async function POST(
   }
 }
 
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const access = await checkModuleAccess(request, 'students')
+    if (!access.allowed) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
+    }
+
+    const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const type = searchParams.get('type')
+    const productId = searchParams.get('productId')
+
+    if (!type || !productId) {
+      return NextResponse.json({ error: 'Type and Product ID are required' }, { status: 400 })
+    }
+
+    const student = await db.student.findUnique({ where: { id } })
+    if (!student) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 })
+    }
+
+    let deleted = false
+
+    if (type === 'COURSE') {
+      const existing = await db.purchasedCourse.findFirst({
+        where: { studentId: id, courseId: productId }
+      })
+      if (existing) {
+        await db.purchasedCourse.delete({ where: { id: existing.id } })
+        deleted = true
+      }
+    } else if (type === 'TEST_SERIES') {
+      const existing = await db.purchasedTestSeries.findFirst({
+        where: { studentId: id, testSeriesId: productId }
+      })
+      if (existing) {
+        await db.purchasedTestSeries.delete({ where: { id: existing.id } })
+        deleted = true
+      }
+    } else if (type === 'DIGITAL_PRODUCT') {
+      const existing = await db.purchasedDigitalProduct.findFirst({
+        where: { studentId: id, digitalProductId: productId }
+      })
+      if (existing) {
+        await db.purchasedDigitalProduct.delete({ where: { id: existing.id } })
+        deleted = true
+      }
+    } else {
+      return NextResponse.json({ error: 'Invalid product type' }, { status: 400 })
+    }
+
+    if (!deleted) {
+      return NextResponse.json({ error: 'Product not found in student purchases' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Successfully revoked access' })
+  } catch (error) {
+    console.error('Failed to revoke product:', error)
+    return NextResponse.json({ error: 'Failed to revoke product' }, { status: 500 })
+  }
+}

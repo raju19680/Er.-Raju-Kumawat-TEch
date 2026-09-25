@@ -6,8 +6,8 @@ import { apiFetchJSON } from '@/lib/api-client'
 
 export function CmsBrandingUpdater() {
   const setAdminBranding = useAppStore((s) => s.setAdminBranding)
+  const currentView = useAppStore((s) => s.currentView)
 
-  
   const resolveMediaUrl = (url: string | null) => {
     if (!url) return ''
     if (url.startsWith('http') || url.startsWith('data:')) return url
@@ -37,7 +37,13 @@ export function CmsBrandingUpdater() {
             }
           }
           if (data.name) {
-            document.title = `${data.name} - Teacher Panel`
+            if (currentView === 'admin') {
+              document.title = `${data.name} - Super Admin Panel`
+            } else if (currentView === 'student') {
+              document.title = `${data.name} - Student Portal`
+            } else {
+              document.title = `${data.name} - Teacher Panel`
+            }
           }
         }
       } catch (error) {
@@ -45,7 +51,7 @@ export function CmsBrandingUpdater() {
       }
     }
     fetchAdminBranding()
-  }, [setAdminBranding])
+  }, [setAdminBranding, currentView])
 
   return null
 }

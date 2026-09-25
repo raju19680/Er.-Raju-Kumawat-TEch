@@ -425,10 +425,11 @@ export default function StudentLayout() {
   const { isAuthenticated, userRole } = useAppStore()
 
   // If logged in as student, show authenticated portal
-  if (isAuthenticated && (userRole?.toLowerCase() === 'student' || userRole?.toLowerCase() === 'user' || !userRole)) {
+  if (isAuthenticated && (userRole?.toLowerCase() === 'student' || userRole?.toLowerCase() === 'user' || userRole?.toLowerCase() === 'platform_admin' || userRole?.toLowerCase() === 'admin' || userRole?.toLowerCase() === 'teacher' || userRole?.toLowerCase() === 'org_admin' || !userRole)) {
     return <AuthenticatedPortal />
   }
 
   // Unauthenticated users see the full-page auth flow
   return <UnauthenticatedView />
 }
+

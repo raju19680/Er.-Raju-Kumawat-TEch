@@ -239,16 +239,15 @@ export async function PUT(
       return NextResponse.json({ success: false, message: 'No in-progress attempt found' }, { status: 404 })
     }
 
-    const isOmr = attempt.test.testMode === 'OMR' || !!omrImageUrl
-
-    if (isOmr) {
+    // If the student uploaded a physical OMR sheet photo
+    if (omrImageUrl) {
       const updated = await db.testAttempt.update({
         where: { id },
         data: {
-          answers: omrImageUrl ? JSON.stringify({ omrImageUrl }) : '{}',
-          omrImageUrl: omrImageUrl || attempt.omrImageUrl,
+          answers: JSON.stringify({ omrImageUrl, ...answers }),
+          omrImageUrl: omrImageUrl,
           timeTaken: timeTaken || 0,
-          status: 'submitted',
+          status: 'omr_pending', // teacher needs to review it
           completedAt: new Date(),
         },
       })

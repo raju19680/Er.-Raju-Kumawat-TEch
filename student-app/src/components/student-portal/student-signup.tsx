@@ -543,7 +543,7 @@ export default function StudentSignup({
               {/* Phone */}
               <div className="space-y-2">
                 <Label htmlFor="signup-phone" className="text-xs font-bold tracking-wide uppercase text-slate-700">
-                  Phone Number
+                  Phone Number <span className="text-red-500">*</span>
                 </Label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
