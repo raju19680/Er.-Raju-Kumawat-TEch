@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Card,
   CardContent,
@@ -195,11 +196,8 @@ function ListSkeleton() {
 export default function QuestionLibrary() {
   const { orgCode } = useAppStore()
 
-  // Data state
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // React Query Client
+  const queryClient = useQueryClient()
 
   // Dynamic metadata
   const [availableTypes, setAvailableTypes] = useState<string[]>([])
@@ -224,7 +222,7 @@ export default function QuestionLibrary() {
   const [sectionFilter, setSectionFilter] = useState<string>('all')
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
-  const limit = 50
+  const limit = 10
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
 
   // Selection state
@@ -290,10 +288,9 @@ export default function QuestionLibrary() {
 
   // ─── Fetch questions ────────────────────────────────────────────────────
 
-  const fetchQuestions = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
+  const { data: queryData, isLoading: loading, isError, error: queryError } = useQuery({
+    queryKey: ['questions', page, search, typeFilter, sectionFilter, difficultyFilter],
+    queryFn: async () => {
       const params = new URLSearchParams()
       params.set('page', String(page))
       params.set('limit', String(limit))
@@ -304,22 +301,13 @@ export default function QuestionLibrary() {
 
       const res = await apiFetch(`/api/teacher/questions?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch questions')
-
-      const data: QuestionsResponse = await res.json()
-      setQuestions(data.items ?? [])
-      setTotal(data.total ?? 0)
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load questions')
-      setQuestions([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
+      return res.json() as Promise<QuestionsResponse>
     }
-  }, [page, search, typeFilter, sectionFilter, difficultyFilter])
+  })
 
-  useEffect(() => {
-    fetchQuestions()
-  }, [fetchQuestions])
+  const questions = queryData?.items ?? []
+  const total = queryData?.total ?? 0
+  const error = isError ? (queryError?.message ?? 'Failed to load questions') : null
 
   // Reset page when filters change
   useEffect(() => {
@@ -341,7 +329,7 @@ export default function QuestionLibrary() {
   const handleEditorSave = () => {
     setEditorOpen(false)
     setEditQuestion(null)
-    fetchQuestions()
+    queryClient.invalidateQueries({ queryKey: ['questions'] })
   }
 
   const handleDuplicate = async (question: Question) => {
@@ -362,7 +350,7 @@ export default function QuestionLibrary() {
       if (!res.ok) throw new Error('Failed to duplicate question')
 
       toast.success('Question duplicated successfully')
-      fetchQuestions()
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to duplicate question')
     }
@@ -379,7 +367,7 @@ export default function QuestionLibrary() {
       if (!res.ok) throw new Error('Failed to delete question')
 
       toast.success('Question deleted successfully')
-      fetchQuestions()
+      queryClient.invalidateQueries({ queryKey: ['questions'] })
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to delete question')
     } finally {
@@ -545,7 +533,7 @@ export default function QuestionLibrary() {
               <AlertCircle className="size-8 text-red-400 mb-3" />
               <p className="text-sm font-medium text-red-700">Failed to load questions</p>
               <p className="text-xs text-red-500 mt-1">{error}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={fetchQuestions}>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => queryClient.invalidateQueries({ queryKey: ['questions'] })}>
                 Try Again
               </Button>
             </div>
