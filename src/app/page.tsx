@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { Component, ReactNode, lazy, Suspense } from 'react'
 import { useAppStore } from '@/lib/store'
@@ -101,7 +101,7 @@ export default function Home() {
   useUrlSync()
 
   return (
-    <main className="min-h-screen bg-gray-50/50">
+    <main className="h-full w-full bg-gray-50/50">
       <ChunkErrorBoundary name="Root View Router">
         <ViewRouter />
       </ChunkErrorBoundary>
