@@ -142,6 +142,7 @@ interface AppState {
   studentSidebarMobileOpen: boolean
   selectedTestSeriesId: string
   selectedTestId: string
+  selectedProductId: string
   takeTestMode: 'CBT' | 'PDF'
   isPracticeMode: boolean
   selectedCourseId: string
@@ -249,13 +250,13 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Student Navigation
   studentPageHistory: [],
-    studentPageHistory: [],
-        studentPage: 'dashboard',
+  studentPage: 'dashboard',
   studentSidebarCollapsed: false,
   studentSidebarMobileOpen: false,
   selectedTestSeriesId: '',
   selectedTestId: '',
-    takeTestMode: 'CBT',
+  selectedProductId: '',
+  takeTestMode: 'CBT',
   isPracticeMode: false,
   selectedCourseId: '',
   selectedAttemptId: '',
@@ -369,7 +370,8 @@ export const useAppStore = create<AppState>((set) => ({
       studentSidebarMobileOpen: false,
       selectedTestSeriesId: '',
       selectedTestId: '',
-    takeTestMode: 'CBT',
+  selectedProductId: '',
+  takeTestMode: 'CBT',
       isPracticeMode: false,
       selectedCourseId: '',
       selectedAttemptId: '',
@@ -416,12 +418,13 @@ export const useAppStore = create<AppState>((set) => ({
   setAdminSidebarMobileOpen: (open) => set({ adminSidebarMobileOpen: open }),
 
   setStudentPage: (page) => set((state) => { if (state.studentPage === page) return { studentSidebarMobileOpen: false }; const newHistory = [...(state.studentPageHistory || []), { page: state.studentPage, courseId: state.selectedCourseId, testSeriesId: state.selectedTestSeriesId, testId: state.selectedTestId, productId: state.selectedProductId }].slice(-20); return { studentPage: page, studentPageHistory: newHistory, studentSidebarMobileOpen: false }; }),
-  goBackStudentPage: () => set((state) => { const history = state.studentPageHistory || []; if (history.length === 0) { return { studentPage: 'dashboard' }; } const newHistory = [...history]; const prevState = newHistory.pop(); return { studentPageHistory: newHistory, studentPage: prevState.page, selectedCourseId: prevState.courseId, selectedTestSeriesId: prevState.testSeriesId, selectedTestId: prevState.testId, selectedProductId: prevState.productId }; }),
+  goBackStudentPage: () => set((state) => { const history = state.studentPageHistory || []; if (history.length === 0) { return { studentPage: 'dashboard' }; } const newHistory = [...history]; const prevState = newHistory.pop(); return { studentPageHistory: newHistory, studentPage: prevState?.page || 'dashboard', selectedCourseId: prevState?.courseId || '', selectedTestSeriesId: prevState?.testSeriesId || '', selectedTestId: prevState?.testId || '', selectedProductId: prevState?.productId || '' }; }),
   toggleStudentSidebar: () => set((s) => ({ studentSidebarCollapsed: !s.studentSidebarCollapsed })),
   setStudentSidebarCollapsed: (collapsed) => set({ studentSidebarCollapsed: collapsed }),
   setStudentSidebarMobileOpen: (open) => set({ studentSidebarMobileOpen: open }),
   setSelectedTestSeriesId: (id) => set({ selectedTestSeriesId: id }),
   setSelectedTestId: (id) => set({ selectedTestId: id }),
+  setSelectedProductId: (id) => set({ selectedProductId: id }),
     setTakeTestMode: (mode) => set({ takeTestMode: mode }),
   setIsPracticeMode: (v) => set({ isPracticeMode: v }),
   setSelectedCourseId: (id) => set({ selectedCourseId: id }),

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
           data: {
             userId: auth.id,
             name: 'Admin Preview',
-            phone: '0000000000'
+            phone: '0000000000', email: 'admin@preview.com', organizationId: 'default'
           }
         });
         studentId = newStudent.id;
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
           data: {
             userId: auth.id,
             name: 'Admin Preview',
-            phone: '0000000000'
+            phone: '0000000000', email: 'admin@preview.com', organizationId: 'default'
           }
         });
         studentId = newStudent.id;
@@ -116,6 +116,8 @@ export async function POST(req: NextRequest) {
         console.error('Failed to create dummy student for admin:', e);
       }
     }
+
+    if (!studentId) { return NextResponse.json({ success: false, message: 'Student ID not found' }, { status: 400 }); }
 
     // Check test exists and is live
     const test = await db.test.findUnique({

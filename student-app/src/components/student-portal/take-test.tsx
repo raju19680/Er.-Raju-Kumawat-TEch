@@ -794,7 +794,7 @@ export default function TakeTest() {
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white min-h-0">
             {false && (
               <div className="w-full md:w-3/5 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-gray-200 relative min-h-0 overflow-auto">
-                <iframe src={test.autoGeneratePdf ? `/api/student/tests/${test.id}/download-pdf?inline=true#toolbar=0` : `${test.pdfUrl}#toolbar=0`} className="w-full h-full border-0" />
+                <iframe src={test?.autoGeneratePdf ? `/api/student/tests/${test?.id}/download-pdf?inline=true#toolbar=0` : `${test?.pdfUrl}#toolbar=0`} className="w-full h-full border-0" />
               </div>
             )}
             
