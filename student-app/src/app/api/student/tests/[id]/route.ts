@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth-helpers'
 
@@ -194,6 +194,8 @@ export async function GET(
         completedAttempts: completedAttemptsCount,
         hasInProgress,
         inProgressAttemptId: inProgressAttempt?.id || null,
+          inProgressAnswers: inProgressAttempt?.answers ? JSON.parse(inProgressAttempt.answers) : {},
+          inProgressTimeTaken: inProgressAttempt?.timeTaken || 0,
         questions: formattedQuestions,
       },
     })
